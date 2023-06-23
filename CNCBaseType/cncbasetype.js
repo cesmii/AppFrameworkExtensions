@@ -58,7 +58,7 @@ detailPane = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      log("info", "Activating cncbasetype detail pane!");
+      logger.log("info", "Activating cncbasetype detail pane!");
       if (this.validateRootElement(rootElement)) {
         
         /*add elements to DOM*/
@@ -82,12 +82,11 @@ detailPane = {
     },
     update: function() {
       if (this.ready) {
-        log("info", "Processing update request on CNC detail pane at " + new Date().toString());
+        logger.log("info", "Processing update request on CNC detail pane at " + new Date().toString());
         this.getAxesData();
         this.getGaugeData();
       } else {
-        if (config.debug)
-          log("info", "Ignoring update request on CNC detail pane since not ready");
+        logger.log("info", "Ignoring update request on CNC detail pane since not ready");
       }
     },
     destroy: function() {
@@ -106,13 +105,13 @@ detailPane = {
       if (rootElement)
         this.rootElement = rootElement;
       if (!this.rootElement || document.getElementById(rootElement) == null) {
-        log("error", "Cannot create detail pane without a root element!");
+        logger.log("error", "Cannot create detail pane without a root element!");
         return false;
       } else {
         if (this.rootElement.nodeName != "DIV") {
           this.rootElement = document.getElementById(rootElement);
           if (this.rootElement.nodeName != "DIV") {
-            log("error", "Root element for detail was not a DIV!");
+            logger.log("error", "Root element for detail was not a DIV!");
             return false;
           } else {
             return true;
@@ -172,24 +171,23 @@ detailPane = {
               if (dataSet.label == this.axes[useAxis].displayName) {
                 //update dataset.data
                 dataSet.data = this.axes[useAxis].samples;
-                if (config.debug)
-                  log("info", "Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
+                logger.log("info", "Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
                 found = true;
               }
             }
             if (!found)
-              log("warn", "Could not find chart axis data to update " + this.axes[useAxis].displayName);
+              logger.log("warn", "Could not find chart axis data to update " + this.axes[useAxis].displayName);
             //update chart!
             this.cncAxisChart.update();
           } else {
-            log("warn", "Could not find axis for sample data!");
+            logger.log("warn", "Could not find axis for sample data!");
           }
         }
       }
       else {
-        log("warn", "The SMIP returned no parseable axis data for the queried time window.");
-        if (payload["errors"] != undefined && config.debug) {
-          log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        logger.log("warn", "The SMIP returned no parseable axis data for the queried time window.");
+        if (payload["errors"] != undefined) {
+          logger.log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
       this.ready = true;
@@ -218,8 +216,7 @@ detailPane = {
         axis[index].samples.push(value);
         axis[index].timestamps.push(ts);  
       } else {
-        if (config.debug)
-          log("info", "Not charting repeated timestamp!");
+        logger.log("info", "Not charting repeated timestamp!");
       }
       // #3 Keep number of charted samples below count
       if (axis[index].samples.length > count) { 
@@ -246,10 +243,10 @@ detailPane = {
             }
           }
         } else {
-          log("error", "Payload did not include expected childEquipment, Axis cannot be rendered!");
+          logger.log("error", "Payload did not include expected childEquipment, Axis cannot be rendered!");
         }
       } else {
-        log("error", "Payload did not conform to Profile and cannot be rendered!");
+        logger.log("error", "Payload did not conform to Profile and cannot be rendered!");
       }
       return discoveredAxis;
     },
@@ -280,17 +277,16 @@ detailPane = {
         payload.data.getRawHistoryDataWithSampling.forEach((element) => {
           this.gauges.forEach((gauge, idx) => {
             if (element.id == gauge.attrid) {
-              if (config.debug)
-                  log("info", "Updating gauge data " + gauge.name + ": " + element.floatvalue);
+              logger.log("info", "Updating gauge data " + gauge.name + ": " + element.floatvalue);
               this.gauges[idx].gauge.set(element.floatvalue);
               document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
             }
           })
         });
       } else {
-        log("warn", "The SMIP returned no parseable gauge data for the queried time window.");
-        if (payload["errors"] != undefined && config.debug) {
-          log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        logger.log("warn", "The SMIP returned no parseable gauge data for the queried time window.");
+        if (payload["errors"] != undefined) {
+          logger.log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
     },
@@ -306,7 +302,7 @@ detailPane = {
               discoveredAttr.push({attrid:motor.attributes[d].id, gauge:null, maxValue:100, name: "Motor"});
           }
         } else {
-          log("warn", "CNC motor could not be found!");
+          logger.log("warn", "CNC motor could not be found!");
         }
         var machineInfo = this.findChildEquipmentByDisplayName("MachineInformation", payload.data.equipment);
         var toolInfo = this.findChildEquipmentByDisplayName("ToolInformation", machineInfo);
@@ -318,7 +314,7 @@ detailPane = {
               discoveredAttr.push({attrid:feedRate.attributes[d].id, gauge:null, maxValue:100, name: "Feed Rate"});
           }    
         } else {
-          log("warn", "CNC Feedrate could not be found!");
+          logger.log("warn", "CNC Feedrate could not be found!");
         }
         var rpm = this.findChildEquipmentByDisplayName("RPM", toolStatus);
         if (rpm != null) {
@@ -327,10 +323,10 @@ detailPane = {
               discoveredAttr.push({attrid:rpm.attributes[d].id, gauge:null, maxValue:100, name: "RPM"});
           }    
         } else {
-          log("warn", "CNC RPM could not be found!");
+          logger.log("warn", "CNC RPM could not be found!");
         }
       } else {
-        log("error", "Payload did not include expected childEquipment, Gauges cannot be rendered!");
+        logger.log("error", "Payload did not include expected childEquipment, Gauges cannot be rendered!");
       }
       return discoveredAttr;
     },
@@ -349,8 +345,7 @@ detailPane = {
       var chartRoot = document.getElementById('axisCanvas');
       this.chartData.datasets = [];
       for (var x=0;x<this.axes.length;x++) {      
-        if (config.debug)
-          log("info", "pushing new axis to chart " + this.axes[x].displayName);
+        logger.log("info", "pushing new axis to chart " + this.axes[x].displayName);
         useColor = this.chartColors;
         this.chartData.datasets.push({
           label: this.axes[x].displayName,
