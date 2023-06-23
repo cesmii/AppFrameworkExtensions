@@ -58,7 +58,7 @@ detailPane = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      console.log("Activating cncbasetype detail pane!");
+      log("info", "Activating cncbasetype detail pane!");
       if (this.validateRootElement(rootElement)) {
         
         /*add elements to DOM*/
@@ -81,9 +81,14 @@ detailPane = {
       }
     },
     update: function() {
-      console.log("Processing update request on CNC detail pane at " + new Date().toString());
-      this.getAxesData();
-      this.getGaugeData();
+      if (this.ready) {
+        log("info", "Processing update request on CNC detail pane at " + new Date().toString());
+        this.getAxesData();
+        this.getGaugeData();
+      } else {
+        if (config.debug)
+          log("info", "Ignoring update request on CNC detail pane since not ready");
+      }
     },
     destroy: function() {
       if (this.cncAxisChart != null)
@@ -101,13 +106,13 @@ detailPane = {
       if (rootElement)
         this.rootElement = rootElement;
       if (!this.rootElement || document.getElementById(rootElement) == null) {
-        console.log("Cannot create detail pane without a root element!");
+        log("error", "Cannot create detail pane without a root element!");
         return false;
       } else {
         if (this.rootElement.nodeName != "DIV") {
           this.rootElement = document.getElementById(rootElement);
           if (this.rootElement.nodeName != "DIV") {
-            console.log("Root element for detail was not a DIV!");
+            log("error", "Root element for detail was not a DIV!");
             return false;
           } else {
             return true;
@@ -127,101 +132,67 @@ detailPane = {
       self.update();
     },
     getAxesData: function() {
-      if (this.ready) {
-        // Pause updates until this one is processed
-        this.ready = false;
-        // Determine time range
-        var endtime = new Date(Date.now());
-        var two_hours_ms = 2*60*60*1000 ;
-        var starttime = new Date(endtime - two_hours_ms);
-        var datatype = "floatvalue";
-
-        for (var x=0;x<this.axes.length;x++) {
-          var attrId;
-          for (var y=0;y<this.axes[x].attributes.length;y++) {
-            if (this.axes[x].attributes[y].displayName == "ActualPosition") {
-              attrId = this.axes[x].attributes[y].id;
-            }
-          }
-          //Get the history for current attribute
-          this.queryHandler(queries.getHistoricalData(attrId, starttime.toISOString(), endtime.toISOString(), datatype), this.processSamples);
-        }
-      } else {
-        if (config.debug)
-          console.log("Ignoring update request since not ready");
-      }
-    },
-    getGaugeData() {
+      // Pause updates until this one is processed
+      this.ready = false;
+      // Determine time range
       var endtime = new Date(Date.now());
-      var starttime = new Date(endtime - 2000);
-      var datatype = 'floatvalue';
-      // For each attribute
-      this.gauges.forEach((gauge,idx) => {
-        this.queryHandler(queries.getHistoricalData(gauge.attrid, starttime.toISOString(), endtime.toISOString(), datatype), this.processGaugeSample);
-      })
+      var two_hours_ms = 2*60*60*1000 ;
+      var starttime = new Date(endtime - two_hours_ms);
+      var datatype = "floatvalue";
+
+      // Build the list of attributes (pens) to be updated
+      var attrIds = [];
+      this.axes.forEach((axis) => {
+        axis.attributes.forEach((attribute) => {
+          if (attribute.displayName == "ActualPosition") {
+            attrIds.push(attribute.id);
+          }
+        });
+      });
+      var attrIds = attrIds.join("\",\"");
+
+      //Make one history query for all attributes
+      var theQuery = queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHandler(theQuery, this.processChartSamples.bind(this));
     },
-    processGaugeSample: function(payload, query, self) {
-      // Get gauge id from attribute
-      if (payload && payload.data && 
-          payload.data.getRawHistoryDataWithSampling && 
-          payload.data.getRawHistoryDataWithSampling.length > 0)
-      {  
-        var element = payload.data.getRawHistoryDataWithSampling[0];
-        if (payload.data.getRawHistoryDataWithSampling.length > 0) { 
-          self.gauges.forEach((gauge, idx) => {
-            if (element.id == gauge.attrid) {
-              self.gauges[idx].gauge.set(element.floatvalue);
-              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
-            }
-          })
-        }
-      } else {
-        console.log("The SMIP returned no parseable gauge data for the queried time window.");
-        if (payload["errors"] != undefined && config.debug) {
-          console.log("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
-        }  
-      }
-    },
-    processSamples: function(payload, query, self) {
+    processChartSamples: function(payload, query) {
       if (payload && payload.data && 
         payload.data.getRawHistoryDataWithSampling && 
         payload.data.getRawHistoryDataWithSampling.length > 0)
       { 
         for (var i=0, j=payload.data.getRawHistoryDataWithSampling.length; i<j; i++) {
           var element = payload.data.getRawHistoryDataWithSampling[i];
-          var useAxis = self.findAxisForAttribId(element.id, self.axes);
+          var useAxis = this.findAxisForAttribId(element.id, this.axes);
           if (useAxis != -1) {
-            self.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, self.axes, self.chartSampleCount);
-            if (config.debug)
-              console.log("Axis data now: " + JSON.stringify(self.axes[useAxis]));
+            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.axes, this.chartSampleCount);
             //find axis dataset in chart
             var found = false;
-            for (var c=0;c<self.chartData.datasets.length;c++) {
-              var dataSet=self.chartData.datasets[c];
-              if (dataSet.label == self.axes[useAxis].displayName) {
+            for (var c=0;c<this.chartData.datasets.length;c++) {
+              var dataSet=this.chartData.datasets[c];
+              if (dataSet.label == this.axes[useAxis].displayName) {
                 //update dataset.data
-                dataSet.data = self.axes[useAxis].samples;
+                dataSet.data = this.axes[useAxis].samples;
                 if (config.debug)
-                  console.log("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
+                  log("info", "Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
                 found = true;
               }
             }
             if (!found)
-              console.log("Could not find chart axis data to update " + self.axes[useAxis].displayName);
+              log("warn", "Could not find chart axis data to update " + this.axes[useAxis].displayName);
             //update chart!
-            self.cncAxisChart.update();
+            this.cncAxisChart.update();
           } else {
-            console.log("Could not find axis for sample data!");
+            log("warn", "Could not find axis for sample data!");
           }
         }
       }
       else {
-        console.log("The SMIP returned no parseable axis data for the queried time window.");
+        log("warn", "The SMIP returned no parseable axis data for the queried time window.");
         if (payload["errors"] != undefined && config.debug) {
-          console.log("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+          log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
-      self.ready = true;
+      this.ready = true;
     },
     findAxisForAttribId:function(attribId, axes) {
       for(var x=0;x<axes.length;x++) {
@@ -248,7 +219,7 @@ detailPane = {
         axis[index].timestamps.push(ts);  
       } else {
         if (config.debug)
-          console.log("Not charting repeated timestamp!");
+          log("info", "Not charting repeated timestamp!");
       }
       // #3 Keep number of charted samples below count
       if (axis[index].samples.length > count) { 
@@ -275,12 +246,53 @@ detailPane = {
             }
           }
         } else {
-          console.log("Payload did not include expected childEquipment, Axis cannot be rendered!");
+          log("error", "Payload did not include expected childEquipment, Axis cannot be rendered!");
         }
       } else {
-        console.log("Payload did not conform to Profile and cannot be rendered!");
+        log("error", "Payload did not conform to Profile and cannot be rendered!");
       }
       return discoveredAxis;
+    },
+    getGaugeData() {
+      var endtime = new Date(Date.now());
+      var starttime = new Date(endtime - 2000);
+      var datatype = 'floatvalue';
+
+      // Build the list of attributes (pens) to be updated
+      var attrIds = [];
+      this.gauges.forEach((gauge) => {
+        attrIds.push(gauge.attrid);
+      });
+      var attrIds = attrIds.join("\",\"");
+
+      //Make one history query for all attributes
+      var theQuery = queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHandler(theQuery, this.processGaugeSamples.bind(this));
+    },
+    processGaugeSamples: function(payload, query) {
+      // Get gauge id from attribute
+      if (payload && payload.data && 
+          payload.data.getRawHistoryDataWithSampling && 
+          payload.data.getRawHistoryDataWithSampling.length > 0)
+      {  
+        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
+        //  However, it introduces inefficiency and we might add logic to throw away extra data
+        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
+          this.gauges.forEach((gauge, idx) => {
+            if (element.id == gauge.attrid) {
+              if (config.debug)
+                  log("info", "Updating gauge data " + gauge.name + ": " + element.floatvalue);
+              this.gauges[idx].gauge.set(element.floatvalue);
+              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
+            }
+          })
+        });
+      } else {
+        log("warn", "The SMIP returned no parseable gauge data for the queried time window.");
+        if (payload["errors"] != undefined && config.debug) {
+          log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        }  
+      }
     },
     parseGaugeAttr: function(payload) {
       var discoveredAttr = [];
@@ -294,7 +306,7 @@ detailPane = {
               discoveredAttr.push({attrid:motor.attributes[d].id, gauge:null, maxValue:100, name: "Motor"});
           }
         } else {
-          console.log("Warning CNC motor could not be found!");
+          log("warn", "CNC motor could not be found!");
         }
         var machineInfo = this.findChildEquipmentByDisplayName("MachineInformation", payload.data.equipment);
         var toolInfo = this.findChildEquipmentByDisplayName("ToolInformation", machineInfo);
@@ -306,7 +318,7 @@ detailPane = {
               discoveredAttr.push({attrid:feedRate.attributes[d].id, gauge:null, maxValue:100, name: "Feed Rate"});
           }    
         } else {
-          console.log("Warning CNC Feedrate could not be found!");
+          log("warn", "CNC Feedrate could not be found!");
         }
         var rpm = this.findChildEquipmentByDisplayName("RPM", toolStatus);
         if (rpm != null) {
@@ -315,10 +327,10 @@ detailPane = {
               discoveredAttr.push({attrid:rpm.attributes[d].id, gauge:null, maxValue:100, name: "RPM"});
           }    
         } else {
-          console.log("Warning CNC RPM could not be found!");
+          log("warn", "CNC RPM could not be found!");
         }
       } else {
-        console.log("Payload did not include expected childEquipment, Gauges cannot be rendered!");
+        log("error", "Payload did not include expected childEquipment, Gauges cannot be rendered!");
       }
       return discoveredAttr;
     },
@@ -338,7 +350,7 @@ detailPane = {
       this.chartData.datasets = [];
       for (var x=0;x<this.axes.length;x++) {      
         if (config.debug)
-          console.log("pushing new axis to chart " + this.axes[x].displayName);
+          log("info", "pushing new axis to chart " + this.axes[x].displayName);
         useColor = this.chartColors;
         this.chartData.datasets.push({
           label: this.axes[x].displayName,
