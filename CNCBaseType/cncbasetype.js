@@ -162,21 +162,31 @@ detailPane = {
     },
     processGaugeSample: function(payload, query, self) {
       // Get gauge id from attribute
-      var element = payload.data.getRawHistoryDataWithSampling[0];
-      if (payload.data.getRawHistoryDataWithSampling.length > 0) { 
-        self.gauges.forEach((gauge, idx) => {
-          if (element.id == gauge.attrid) {
-            self.gauges[idx].gauge.set(element.floatvalue);
-            document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
-          }
-        })
+      if (payload && payload.data && 
+          payload.data.getRawHistoryDataWithSampling && 
+          payload.data.getRawHistoryDataWithSampling.length > 0)
+      {  
+        var element = payload.data.getRawHistoryDataWithSampling[0];
+        if (payload.data.getRawHistoryDataWithSampling.length > 0) { 
+          self.gauges.forEach((gauge, idx) => {
+            if (element.id == gauge.attrid) {
+              self.gauges[idx].gauge.set(element.floatvalue);
+              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
+            }
+          })
+        }
+      } else {
+        console.log("The SMIP returned no parseable gauge data for the queried time window.");
+        if (payload["errors"] != undefined && config.debug) {
+          console.log("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        }  
       }
     },
     processSamples: function(payload, query, self) {
-      if (payload["errors"] != undefined) {
-        console.log("Errors from SMIP query: " + errors);
-      }
-      else {
+      if (payload && payload.data && 
+        payload.data.getRawHistoryDataWithSampling && 
+        payload.data.getRawHistoryDataWithSampling.length > 0)
+      { 
         for (var i=0, j=payload.data.getRawHistoryDataWithSampling.length; i<j; i++) {
           var element = payload.data.getRawHistoryDataWithSampling[i];
           var useAxis = self.findAxisForAttribId(element.id, self.axes);
@@ -204,6 +214,12 @@ detailPane = {
             console.log("Could not find axis for sample data!");
           }
         }
+      }
+      else {
+        console.log("The SMIP returned no parseable axis data for the queried time window.");
+        if (payload["errors"] != undefined && config.debug) {
+          console.log("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        }  
       }
       self.ready = true;
     },
@@ -317,7 +333,7 @@ detailPane = {
       }
       return null;
     },
-    renderAxisChart: function(instanceData) {
+    renderAxisChart: function() {
       var chartRoot = document.getElementById('axisCanvas');
       this.chartData.datasets = [];
       for (var x=0;x<this.axes.length;x++) {      
