@@ -58,7 +58,7 @@ detailPane = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      console.log("Activating cncbasetype detail pane");
+      console.log("Activating cncbasetype detail pane!");
       if (this.validateRootElement(rootElement)) {
         
         /*add elements to DOM*/
