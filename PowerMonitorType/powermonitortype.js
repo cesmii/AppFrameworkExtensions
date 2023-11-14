@@ -1,4 +1,4 @@
-detailPane = {
+typeSupportHelpers.push(powermonitorType = {
     /* IDetailPane Interface Properties */
     typeName: "cncbasetype",
     rootElement: null,
@@ -77,8 +77,11 @@ detailPane = {
           chartDiv.appendChild(chartCanvas);
           this.rootElement.appendChild(chartDiv);
         }
-        this.queryHandler(queries.getEquipmentChildren(this.instanceId), this.renderUI);
+        this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.typeName, this.renderUI);
       }
+    },
+    loadMachines: function(callBack) {
+      this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), this.typeName, callBack.bind(this));
     },
     update: function() {
       if (this.ready) {
@@ -151,8 +154,8 @@ detailPane = {
       var attrIds = attrIds.join("\",\"");
 
       //Make one history query for all attributes
-      var theQuery = queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.processChartSamples.bind(this));
+      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHandler(theQuery, this.typeName, this.processChartSamples.bind(this));
     },
     processChartSamples: function(payload, query) {
       console.log(payload);
@@ -259,8 +262,8 @@ detailPane = {
       var attrIds = attrIds.join("\",\"");
 
       //Make one history query for all attributes
-      var theQuery = queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.processGaugeSamples.bind(this));
+      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHandler(theQuery, this.typeName, this.processGaugeSamples.bind(this));
     },
     processGaugeSamples: function(payload, query) {
       // Get gauge id from attribute
@@ -383,4 +386,4 @@ detailPane = {
       }
       return randoms;
     },
-};
+});
