@@ -1,13 +1,13 @@
-typeSupportHelpers.push(cncbasetype = {
+typeSupportHelpers.push(wellpumptype = {
     /* IDetailPane Interface Properties */
-    typeName: "cncbasetype",
+    typeName: "wellpumptype",
     rootElement: null,
     instanceId: null,
     queryHandler: null,
 
     /* Private implementation-specific properties */
     ready: true,
-    cncAxisChart: null,
+    wellpumpChart: null,
     gauges: [],
     chartSampleCount: 10,
     axes: [],
@@ -58,18 +58,17 @@ typeSupportHelpers.push(cncbasetype = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      logger.info("Activating cncbasetype detail pane!");
-      include("TypeSupport/CNCBaseType/gauge.js");
+      logger.info("Activating wellpumptype detail pane!");
+      include("TypeSupport/WellPumpType/gauge.js");
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
         integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
         crossOrigin: "anonymous",
         referrerpolicy:"no-referrer"
       }, () => {
-        /*add elements to DOM once dependency scripts are loaded*/
-        logger.info("Dependencies loaded for cbcbasetype, initializing UI.")
         this.rootElement = appFramework.validateRootElement(rootElement);
         if (this.rootElement) {  
+          /*add elements to DOM once dependency scripts are loaded*/
           if (document.getElementById("gaugesDiv") == null) {
             var gaugesDiv = document.createElement("div");
             gaugesDiv.id = "gaugesDiv";
@@ -78,34 +77,34 @@ typeSupportHelpers.push(cncbasetype = {
           if (document.getElementById("axisData") == null) {
             var chartDiv = document.createElement("div");
             chartDiv.id = "axisData";
-            chartDiv.setAttribute("class", "cncbasetype-chart");
+            chartDiv.setAttribute("class", "wellpumptype-chart");
             var chartCanvas = document.createElement("canvas");
             chartCanvas.id = "axisCanvas";
-            chartCanvas.setAttribute("class", "cncbasetype-chartcanvas");
+            chartCanvas.setAttribute("class", "wellpumptype-chartcanvas");
             chartDiv.appendChild(chartCanvas);
             this.rootElement.appendChild(chartDiv);
           }
-          this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
-        }
+          this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.typeName, this.renderUI);
+        }  
       });
     },
     loadMachines: function(callBack) {
-      this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), callBack.bind(this));
+      this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), this.typeName, callBack.bind(this));
     },
     update: function() {
       if (this.ready) {
-        logger.info("Processing update request on CNC detail pane at " + new Date().toString());
+        logger.info("Processing update request on WellPump detail pane at " + new Date().toString());
         this.getAxesData();
         this.getGaugeData();
       } else {
-        logger.info("Ignoring update request on CNC detail pane since not ready");
+        logger.info("Ignoring update request on WellPump detail pane since not ready");
       }
     },
     destroy: function() {
-      if (this.cncAxisChart != null)
-        this.cncAxisChart.destroy();
+      if (this.wellpumpChart != null)
+        this.wellpumpChart.destroy();
       this.chartData.datasets = [];
-      this.cncAxisChart = null;
+      this.wellpumpChart = null;
       this.gauges = [];
       if (document.getElementById("gaugesDiv") != null) 
         document.getElementById("gaugesDiv").remove();
@@ -128,7 +127,7 @@ typeSupportHelpers.push(cncbasetype = {
       this.ready = false;
       // Determine time range
       var endtime = new Date(Date.now());
-      var two_hours_ms = 2*60*60*1000 ;
+      var two_hours_ms = 1*10*60*1000 ;
       var starttime = new Date(endtime - two_hours_ms);
       var datatype = "floatvalue";
 
@@ -136,7 +135,7 @@ typeSupportHelpers.push(cncbasetype = {
       var attrIds = [];
       this.axes.forEach((axis) => {
         axis.attributes.forEach((attribute) => {
-          if (attribute.displayName == "ActualPosition") {
+          if (attribute.displayName == "Reactive Power") {
             attrIds.push(attribute.id);
           }
         });
@@ -145,9 +144,10 @@ typeSupportHelpers.push(cncbasetype = {
 
       //Make one history query for all attributes
       var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.processChartSamples.bind(this));
+      this.queryHandler(theQuery, this.typeName, this.processChartSamples.bind(this));
     },
     processChartSamples: function(payload, query) {
+      console.log(payload);
       if (payload && payload.data && 
         payload.data.getRawHistoryDataWithSampling && 
         payload.data.getRawHistoryDataWithSampling.length > 0)
@@ -171,7 +171,7 @@ typeSupportHelpers.push(cncbasetype = {
             if (!found)
               logger.warn("Could not find chart axis data to update " + this.axes[useAxis].displayName);
             //update chart!
-            this.cncAxisChart.update();
+            this.wellpumpChart.update();
           } else {
             logger.warn("Could not find axis for sample data!");
           }
@@ -205,12 +205,12 @@ typeSupportHelpers.push(cncbasetype = {
       //     Note: Comparing times is hell in Javascript, turn them into strings
       var ts1 = "T" + ts;
       var ts2 = "T" + axis[index].timestamps[axis[index].timestamps.length-1];
-      if (ts1 != ts2) {
+      //if (ts1 != ts2) {
         axis[index].samples.push(value);
         axis[index].timestamps.push(ts);  
-      } else {
-        logger.info("Not charting repeated timestamp!");
-      }
+      //} else {
+      //  logger.info("Not charting repeated timestamp!");
+      //}
       // #3 Keep number of charted samples below count
       if (axis[index].samples.length > count) { 
         axis[index].samples.shift();
@@ -221,23 +221,18 @@ typeSupportHelpers.push(cncbasetype = {
       var discoveredAxis = [];
       if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
         var children = payload.data.equipment.childEquipment;
+        console.log(JSON.stringify(children))
         if (children.length > 0) {
           for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase() == "channellist") {
-              for (var d=0;d<children[c].childEquipment[0].childEquipment.length;d++) {
-                var child = children[c].childEquipment[0].childEquipment[d];
-                if (child != undefined && (child.displayName.toLowerCase() == "positionbcs" || child.displayName.toLowerCase() == "positionwcs")) {
-                  var axisList = child.childEquipment;
-                  for (var e=0;e<axisList.length;e++) {
-                    discoveredAxis.push( {"displayName":axisList[e].displayName, "equipmentId": axisList[e].id, "attributes": axisList[e].attributes, "timestamps":[], "samples": []});
-                  }
+            if (children[c].displayName.toLowerCase().indexOf("phase") != -1) {
+                var child = children[c];
+                for (var d=0;d<child.attributes.length;d++) {
+                  if (child.attributes[d].displayName == "Reactive Power")
+                    discoveredAxis.push( {"displayName":child.displayName + " Reactive Power", "equipmentId": child.id, "attributes": child.attributes, "timestamps":[], "samples": []});
                 }
               }
             }
           }
-        } else {
-          logger.error("Payload did not include expected childEquipment, Axis cannot be rendered!");
-        }
       } else {
         logger.error("Payload did not conform to Profile and cannot be rendered!");
       }
@@ -257,7 +252,7 @@ typeSupportHelpers.push(cncbasetype = {
 
       //Make one history query for all attributes
       var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.processGaugeSamples.bind(this));
+      this.queryHandler(theQuery, this.typeName, this.processGaugeSamples.bind(this));
     },
     processGaugeSamples: function(payload, query) {
       // Get gauge id from attribute
@@ -286,42 +281,17 @@ typeSupportHelpers.push(cncbasetype = {
     parseGaugeAttr: function(payload) {
       var discoveredAttr = [];
       if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var spindleList = this.findChildEquipmentByDisplayName("SpindleList", payload.data.equipment);
-        var q = this.findChildEquipmentByDisplayName("Q", spindleList);
-        var motor = this.findChildEquipmentByDisplayName("Motor", q);
-        if (motor != null) {
-          for (var d=0;d<motor.attributes.length;d++) {
-            if (motor.attributes[d].displayName == "LoadRate")
-              discoveredAttr.push({attrid:motor.attributes[d].id, gauge:null, maxValue:100, name: "Motor"});
+        for (var i=0;i<payload.data.equipment.childEquipment.length;i++) {
+          var phase = payload.data.equipment.childEquipment[i];
+          if (phase) {
+              for (var d=0;d<phase.attributes.length;d++) {
+                if (phase.attributes[d].displayName == "Voltage")
+                discoveredAttr.push({attrid:phase.attributes[d].id, gauge:null, maxValue:800, name: phase.displayName + " Voltage"});
+              }
+            }
           }
-        } else {
-          logger.warn("CNC motor could not be found!");
         }
-        var machineInfo = this.findChildEquipmentByDisplayName("MachineInformation", payload.data.equipment);
-        var toolInfo = this.findChildEquipmentByDisplayName("ToolInformation", machineInfo);
-        var toolStatus = this.findChildEquipmentByDisplayName("ToolStatus", toolInfo);
-        var feedRate = this.findChildEquipmentByDisplayName("Feedrate", toolStatus);
-        if (feedRate != null) {
-          for (var d=0;d<feedRate.attributes.length;d++) {
-            if (feedRate.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:feedRate.attributes[d].id, gauge:null, maxValue:100, name: "Feed Rate"});
-          }    
-        } else {
-          logger.warn("CNC Feedrate could not be found!");
-        }
-        var rpm = this.findChildEquipmentByDisplayName("RPM", toolStatus);
-        if (rpm != null) {
-          for (var d=0;d<rpm.attributes.length;d++) {
-            if (rpm.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:rpm.attributes[d].id, gauge:null, maxValue:100, name: "RPM"});
-          }    
-        } else {
-          logger.warn("CNC RPM could not be found!");
-        }
-      } else {
-        logger.error("Payload did not include expected childEquipment, Gauges cannot be rendered!");
-      }
-      return discoveredAttr;
+        return discoveredAttr;
     },
     findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
       if (childEquipName == null || parentEquipment == null)
@@ -349,7 +319,7 @@ typeSupportHelpers.push(cncbasetype = {
           pointBackgroundColor: Object.values(useColor),
         })
       }
-      this.cncAxisChart = new Chart(chartRoot,{
+      this.wellpumpChart = new Chart(chartRoot,{
         type: 'line',
         data: this.chartData,
         options: {
@@ -367,20 +337,20 @@ typeSupportHelpers.push(cncbasetype = {
         if (document.getElementById(`gauge${idx}Div`) == null) {
             var gaugeDiv = document.createElement("div");
             gaugeDiv.id = `gauge${idx}Div`;
-            gaugeDiv.setAttribute("class", "cncbasetype-gauge");
+            gaugeDiv.setAttribute("class", "wellpumptype-gauge");
             var gaugeLabel = document.createElement("div");
             gaugeLabel.id = `gauge${idx}Label`;
             gaugeLabel.innerText = gauge.name;
-            gaugeLabel.setAttribute("class", "cncbasetype-gaugelabel");
+            gaugeLabel.setAttribute("class", "wellpumptype-gaugelabel");
             gaugeDiv.appendChild(gaugeLabel);
             var gaugeCanvas = document.createElement("canvas");
             gaugeCanvas.id = `gauge${idx}Canvas`;
-            gaugeCanvas.setAttribute("class", "cncbasetype-gaugecanvas");
+            gaugeCanvas.setAttribute("class", "wellpumptype-gaugecanvas");
             gaugeDiv.appendChild(gaugeCanvas);
             var gaugeValue = document.createElement("div");
             gaugeValue.id = `gauge${idx}Value`;
             gaugeValue.innerText = "0";
-            gaugeValue.setAttribute("class", "cncbasetype-gaugevalue");
+            gaugeValue.setAttribute("class", "wellpumptype-gaugevalue");
             gaugeDiv.appendChild(gaugeValue);
             gaugesRoot.appendChild(gaugeDiv);
           }

@@ -58,7 +58,7 @@ typeSupportHelpers.push(powermonitorType = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      logger.log("info", "Activating powermonitortype detail pane!");
+      logger.info("Activating powermonitortype detail pane!");
       include("TypeSupport/PowerMonitorType/gauge.js");
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
@@ -66,7 +66,8 @@ typeSupportHelpers.push(powermonitorType = {
         crossOrigin: "anonymous",
         referrerpolicy:"no-referrer"
       }, () => {
-        if (this.validateRootElement(rootElement)) {
+        this.rootElement = appFramework.validateRootElement(rootElement);
+        if (this.rootElement) {  
           /*add elements to DOM once dependency scripts are loaded*/
           if (document.getElementById("gaugesDiv") == null) {
             var gaugesDiv = document.createElement("div");
@@ -92,11 +93,11 @@ typeSupportHelpers.push(powermonitorType = {
     },
     update: function() {
       if (this.ready) {
-        logger.log("info", "Processing update request on PowerMonitor detail pane at " + new Date().toString());
+        logger.info("Processing update request on PowerMonitor detail pane at " + new Date().toString());
         this.getAxesData();
         this.getGaugeData();
       } else {
-        logger.log("info", "Ignoring update request on PowerMonitor detail pane since not ready");
+        logger.info("Ignoring update request on PowerMonitor detail pane since not ready");
       }
     },
     destroy: function() {
@@ -109,25 +110,6 @@ typeSupportHelpers.push(powermonitorType = {
         document.getElementById("gaugesDiv").remove();
       if (document.getElementById("axisData") != null) 
         document.getElementById("axisData").remove();        
-    },
-    // helper to ensure this pane has a place to attach
-    validateRootElement: function(rootElement) {
-      if (rootElement)
-        this.rootElement = rootElement;
-      if (!this.rootElement || document.getElementById(rootElement) == null) {
-        logger.log("error", "Cannot create detail pane without a root element!");
-        return false;
-      } else {
-        if (this.rootElement.nodeName != "DIV") {
-          this.rootElement = document.getElementById(rootElement);
-          if (this.rootElement.nodeName != "DIV") {
-            logger.log("error", "Root element for detail was not a DIV!");
-            return false;
-          } else {
-            return true;
-          }
-        }
-      }
     },
 
     /* Private implementation-specific methods */
@@ -182,23 +164,23 @@ typeSupportHelpers.push(powermonitorType = {
               if (dataSet.label == this.axes[useAxis].displayName) {
                 //update dataset.data
                 dataSet.data = this.axes[useAxis].samples;
-                logger.log("info", "Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
+                logger.info("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
                 found = true;
               }
             }
             if (!found)
-              logger.log("warn", "Could not find chart axis data to update " + this.axes[useAxis].displayName);
+              logger.warn("Could not find chart axis data to update " + this.axes[useAxis].displayName);
             //update chart!
             this.powermonitorAxisChart.update();
           } else {
-            logger.log("warn", "Could not find axis for sample data!");
+            logger.warn("Could not find axis for sample data!");
           }
         }
       }
       else {
-        logger.log("warn", "The SMIP returned no parseable axis data for the queried time window.");
+        logger.warn("The SMIP returned no parseable axis data for the queried time window.");
         if (payload["errors"] != undefined) {
-          logger.log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
       this.ready = true;
@@ -227,7 +209,7 @@ typeSupportHelpers.push(powermonitorType = {
         axis[index].samples.push(value);
         axis[index].timestamps.push(ts);  
       //} else {
-      //  logger.log("info", "Not charting repeated timestamp!");
+      //  logger.info("Not charting repeated timestamp!");
       //}
       // #3 Keep number of charted samples below count
       if (axis[index].samples.length > count) { 
@@ -252,7 +234,7 @@ typeSupportHelpers.push(powermonitorType = {
             }
           }
       } else {
-        logger.log("error", "Payload did not conform to Profile and cannot be rendered!");
+        logger.error("Payload did not conform to Profile and cannot be rendered!");
       }
       return discoveredAxis;
     },
@@ -283,16 +265,16 @@ typeSupportHelpers.push(powermonitorType = {
         payload.data.getRawHistoryDataWithSampling.forEach((element) => {
           this.gauges.forEach((gauge, idx) => {
             if (element.id == gauge.attrid) {
-              logger.log("info", "Updating gauge data " + gauge.name + ": " + element.floatvalue);
+              logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
               this.gauges[idx].gauge.set(element.floatvalue);
               document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
             }
           })
         });
       } else {
-        logger.log("warn", "The SMIP returned no parseable gauge data for the queried time window.");
+        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
         if (payload["errors"] != undefined) {
-          logger.log("warn", "Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
     },
@@ -326,7 +308,7 @@ typeSupportHelpers.push(powermonitorType = {
       var chartRoot = document.getElementById('axisCanvas');
       this.chartData.datasets = [];
       for (var x=0;x<this.axes.length;x++) {      
-        logger.log("info", "pushing new axis to chart " + this.axes[x].displayName);
+        logger.info("pushing new axis to chart " + this.axes[x].displayName);
         useColor = this.chartColors;
         this.chartData.datasets.push({
           label: this.axes[x].displayName,

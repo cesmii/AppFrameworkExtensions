@@ -1,0 +1,25 @@
+.wellpumptype-chart {
+    border:1px dotted lightblue; max-height:400px;
+    min-width: 400px;
+}
+.wellpumptype-chartcanvas {
+    max-height: 400px;
+}
+.wellpumptype-gauge {
+    border:1px dotted gray; max-height:200px;
+    display: inline-block;
+}
+.wellpumptype-gaugelabel {
+    margin-top: 10px;
+    color: rgb(61, 61, 61);
+    width:100%;
+    text-align: center;
+}
+.wellpumptype-gaugevalue {
+    color: rgb(61, 61, 61);
+    width:100%;
+    text-align: center;
+    text-shadow: 1px 1px 2px white;
+    margin-top: -80px;
+    margin-bottom: 50px;
+}
