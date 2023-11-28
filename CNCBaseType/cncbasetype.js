@@ -59,26 +59,34 @@ typeSupportHelpers.push(cncbasetype = {
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
       logger.log("info", "Activating cncbasetype detail pane!");
-      if (this.validateRootElement(rootElement)) {
-        
-        /*add elements to DOM*/
-        if (document.getElementById("gaugesDiv") == null) {
-          var gaugesDiv = document.createElement("div");
-          gaugesDiv.id = "gaugesDiv";
-          this.rootElement.appendChild(gaugesDiv);
+      include("TypeSupport/CNCBaseType/gauge.js");
+      include({ 
+        src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
+        integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
+        crossOrigin: "anonymous",
+        referrerpolicy:"no-referrer"
+      }, () => {
+        /*add elements to DOM once dependency scripts are loaded*/
+        logger.log(info, "Dependencies loaded for cbcbasetype, initializing UI.")
+        if (this.validateRootElement(rootElement)) {
+          if (document.getElementById("gaugesDiv") == null) {
+            var gaugesDiv = document.createElement("div");
+            gaugesDiv.id = "gaugesDiv";
+            this.rootElement.appendChild(gaugesDiv);
+          }
+          if (document.getElementById("axisData") == null) {
+            var chartDiv = document.createElement("div");
+            chartDiv.id = "axisData";
+            chartDiv.setAttribute("class", "cncbasetype-chart");
+            var chartCanvas = document.createElement("canvas");
+            chartCanvas.id = "axisCanvas";
+            chartCanvas.setAttribute("class", "cncbasetype-chartcanvas");
+            chartDiv.appendChild(chartCanvas);
+            this.rootElement.appendChild(chartDiv);
+          }
+          this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
         }
-        if (document.getElementById("axisData") == null) {
-          var chartDiv = document.createElement("div");
-          chartDiv.id = "axisData";
-          chartDiv.setAttribute("class", "cncbasetype-chart");
-          var chartCanvas = document.createElement("canvas");
-          chartCanvas.id = "axisCanvas";
-          chartCanvas.setAttribute("class", "cncbasetype-chartcanvas");
-          chartDiv.appendChild(chartCanvas);
-          this.rootElement.appendChild(chartDiv);
-        }
-        this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
-      }
+      });
     },
     loadMachines: function(callBack) {
       this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), callBack.bind(this));

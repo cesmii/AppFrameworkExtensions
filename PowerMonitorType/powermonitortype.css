@@ -1,28 +1,28 @@
 
-.cncbasetype {
+.powermonitortype {
 /* machine type specific overrides */
 }
-.cncbasetype.updating {
+.powermonitortype.updating {
 /* machine type specific overrides */
 }
-.cncbasetype-chart {
+.powermonitortype-chart {
     border:1px dotted lightblue; max-height:400px;
     min-width: 400px;
 }
-.cncbasetype-chartcanvas {
+.powermonitortype-chartcanvas {
     max-height: 400px;
 }
-.cncbasetype-gauge {
+.powermonitortype-gauge {
     border:1px dotted gray; max-height:200px;
     display: inline-block;
 }
-.cncbasetype-gaugelabel {
+.powermonitortype-gaugelabel {
     margin-top: 10px;
     color: rgb(61, 61, 61);
     width:100%;
     text-align: center;
 }
-.cncbasetype-gaugevalue {
+.powermonitortype-gaugevalue {
     color: rgb(61, 61, 61);
     width:100%;
     text-align: center;

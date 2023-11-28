@@ -1,13 +1,13 @@
 typeSupportHelpers.push(powermonitorType = {
     /* IDetailPane Interface Properties */
-    typeName: "cncbasetype",
+    typeName: "powermonitortype",
     rootElement: null,
     instanceId: null,
     queryHandler: null,
 
     /* Private implementation-specific properties */
     ready: true,
-    cncAxisChart: null,
+    powermonitorAxisChart: null,
     gauges: [],
     chartSampleCount: 10,
     axes: [],
@@ -58,45 +58,52 @@ typeSupportHelpers.push(powermonitorType = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      logger.log("info", "Activating cncbasetype detail pane!");
-      if (this.validateRootElement(rootElement)) {
-        
-        /*add elements to DOM*/
-        if (document.getElementById("gaugesDiv") == null) {
-          var gaugesDiv = document.createElement("div");
-          gaugesDiv.id = "gaugesDiv";
-          this.rootElement.appendChild(gaugesDiv);
-        }
-        if (document.getElementById("axisData") == null) {
-          var chartDiv = document.createElement("div");
-          chartDiv.id = "axisData";
-          chartDiv.setAttribute("class", "cncbasetype-chart");
-          var chartCanvas = document.createElement("canvas");
-          chartCanvas.id = "axisCanvas";
-          chartCanvas.setAttribute("class", "cncbasetype-chartcanvas");
-          chartDiv.appendChild(chartCanvas);
-          this.rootElement.appendChild(chartDiv);
-        }
-        this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.typeName, this.renderUI);
-      }
+      logger.log("info", "Activating powermonitortype detail pane!");
+      include("TypeSupport/PowerMonitorType/gauge.js");
+      include({ 
+        src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
+        integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
+        crossOrigin: "anonymous",
+        referrerpolicy:"no-referrer"
+      }, () => {
+        if (this.validateRootElement(rootElement)) {
+          /*add elements to DOM once dependency scripts are loaded*/
+          if (document.getElementById("gaugesDiv") == null) {
+            var gaugesDiv = document.createElement("div");
+            gaugesDiv.id = "gaugesDiv";
+            this.rootElement.appendChild(gaugesDiv);
+          }
+          if (document.getElementById("axisData") == null) {
+            var chartDiv = document.createElement("div");
+            chartDiv.id = "axisData";
+            chartDiv.setAttribute("class", "powermonitortype-chart");
+            var chartCanvas = document.createElement("canvas");
+            chartCanvas.id = "axisCanvas";
+            chartCanvas.setAttribute("class", "powermonitortype-chartcanvas");
+            chartDiv.appendChild(chartCanvas);
+            this.rootElement.appendChild(chartDiv);
+          }
+          this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.typeName, this.renderUI);
+        }  
+      });
     },
     loadMachines: function(callBack) {
       this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), this.typeName, callBack.bind(this));
     },
     update: function() {
       if (this.ready) {
-        logger.log("info", "Processing update request on CNC detail pane at " + new Date().toString());
+        logger.log("info", "Processing update request on PowerMonitor detail pane at " + new Date().toString());
         this.getAxesData();
         this.getGaugeData();
       } else {
-        logger.log("info", "Ignoring update request on CNC detail pane since not ready");
+        logger.log("info", "Ignoring update request on PowerMonitor detail pane since not ready");
       }
     },
     destroy: function() {
-      if (this.cncAxisChart != null)
-        this.cncAxisChart.destroy();
+      if (this.powermonitorAxisChart != null)
+        this.powermonitorAxisChart.destroy();
       this.chartData.datasets = [];
-      this.cncAxisChart = null;
+      this.powermonitorAxisChart = null;
       this.gauges = [];
       if (document.getElementById("gaugesDiv") != null) 
         document.getElementById("gaugesDiv").remove();
@@ -182,7 +189,7 @@ typeSupportHelpers.push(powermonitorType = {
             if (!found)
               logger.log("warn", "Could not find chart axis data to update " + this.axes[useAxis].displayName);
             //update chart!
-            this.cncAxisChart.update();
+            this.powermonitorAxisChart.update();
           } else {
             logger.log("warn", "Could not find axis for sample data!");
           }
@@ -330,7 +337,7 @@ typeSupportHelpers.push(powermonitorType = {
           pointBackgroundColor: Object.values(useColor),
         })
       }
-      this.cncAxisChart = new Chart(chartRoot,{
+      this.powermonitorAxisChart = new Chart(chartRoot,{
         type: 'line',
         data: this.chartData,
         options: {
@@ -348,20 +355,20 @@ typeSupportHelpers.push(powermonitorType = {
         if (document.getElementById(`gauge${idx}Div`) == null) {
             var gaugeDiv = document.createElement("div");
             gaugeDiv.id = `gauge${idx}Div`;
-            gaugeDiv.setAttribute("class", "cncbasetype-gauge");
+            gaugeDiv.setAttribute("class", "powermonitortype-gauge");
             var gaugeLabel = document.createElement("div");
             gaugeLabel.id = `gauge${idx}Label`;
             gaugeLabel.innerText = gauge.name;
-            gaugeLabel.setAttribute("class", "cncbasetype-gaugelabel");
+            gaugeLabel.setAttribute("class", "powermonitortype-gaugelabel");
             gaugeDiv.appendChild(gaugeLabel);
             var gaugeCanvas = document.createElement("canvas");
             gaugeCanvas.id = `gauge${idx}Canvas`;
-            gaugeCanvas.setAttribute("class", "cncbasetype-gaugecanvas");
+            gaugeCanvas.setAttribute("class", "powermonitortype-gaugecanvas");
             gaugeDiv.appendChild(gaugeCanvas);
             var gaugeValue = document.createElement("div");
             gaugeValue.id = `gauge${idx}Value`;
             gaugeValue.innerText = "0";
-            gaugeValue.setAttribute("class", "cncbasetype-gaugevalue");
+            gaugeValue.setAttribute("class", "powermonitortype-gaugevalue");
             gaugeDiv.appendChild(gaugeValue);
             gaugesRoot.appendChild(gaugeDiv);
           }
