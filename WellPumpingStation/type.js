@@ -1,5 +1,5 @@
 //The name of your type (in this case, example) should match your TypeSupport folder name
-typeSupport.machineTypes.wellpumptype = {
+typeSupport.machineTypes.WellPumpingStation = {
     "name": "Well Pump",
     "icon": "wellpumptype.png",
     "script": "wellpumptype.js",

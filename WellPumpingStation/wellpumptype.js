@@ -1,16 +1,19 @@
 typeSupportHelpers.push(wellpumptype = {
     /* IDetailPane Interface Properties */
-    typeName: "wellpumptype",
+    typeName: "WellPumpingStation",
+    smipTypeName: "well_pumping_station",
     rootElement: null,
     instanceId: null,
-    queryHandler: null,
+    queryHelper: null,
 
     /* Private implementation-specific properties */
+    name: "wellPumpTypeSupport",
+    scriptSrc: document.currentScript,
     ready: true,
     wellpumpChart: null,
     gauges: [],
     chartSampleCount: 10,
-    axes: [],
+    pens: [],
     chartData: {
       labels: [
         '0',
@@ -59,7 +62,8 @@ typeSupportHelpers.push(wellpumptype = {
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
       logger.info("Activating wellpumptype detail pane!");
-      include("TypeSupport/WellPumpType/gauge.js");
+      var scriptUrl = this.scriptSrc.src.replace("wellpumptype.js", "gauge.js");
+      include(scriptUrl);
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
         integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
@@ -74,28 +78,30 @@ typeSupportHelpers.push(wellpumptype = {
             gaugesDiv.id = "gaugesDiv";
             this.rootElement.appendChild(gaugesDiv);
           }
-          if (document.getElementById("axisData") == null) {
+          if (document.getElementById("penData") == null) {
             var chartDiv = document.createElement("div");
-            chartDiv.id = "axisData";
+            chartDiv.id = "penData";
             chartDiv.setAttribute("class", "wellpumptype-chart");
             var chartCanvas = document.createElement("canvas");
-            chartCanvas.id = "axisCanvas";
+            chartCanvas.id = "penCanvas";
             chartCanvas.setAttribute("class", "wellpumptype-chartcanvas");
             chartDiv.appendChild(chartCanvas);
             this.rootElement.appendChild(chartDiv);
           }
-          this.queryHandler(smip.queries.getEquipmentChildren(this.instanceId), this.typeName, this.renderUI);
+          this.queryHelper(smip.queries.getAttributesForEquipmentById(this.instanceId), this.renderUI);
         }  
       });
     },
     loadMachines: function(callBack) {
-      this.queryHandler(smip.queries.getEquipments(this.typeName, config.app.modelParentId), this.typeName, callBack.bind(this));
+      this.queryHelper(smip.queries.getEquipmentsByTypeName(this.smipTypeName, config.app.modelParentId), function(payload) {
+        appFramework.showMachines(payload, this.typeName);
+      }.bind(this));
     },
     update: function() {
       if (this.ready) {
         logger.info("Processing update request on WellPump detail pane at " + new Date().toString());
-        this.getAxesData();
-        this.getGaugeData();
+        this.getPenData();
+        //this.getGaugeData();
       } else {
         logger.info("Ignoring update request on WellPump detail pane since not ready");
       }
@@ -108,21 +114,24 @@ typeSupportHelpers.push(wellpumptype = {
       this.gauges = [];
       if (document.getElementById("gaugesDiv") != null) 
         document.getElementById("gaugesDiv").remove();
-      if (document.getElementById("axisData") != null) 
-        document.getElementById("axisData").remove();        
+      if (document.getElementById("penData") != null) 
+        document.getElementById("penData").remove();
+      while (this.rootElement.firstChild) {
+        this.rootElement.removeChild(this.rootElement.lastChild);
+      }     
     },
 
     /* Private implementation-specific methods */
     renderUI: function(payload, query, self) {
-      self.axes = self.parseAxis(payload);
+      self.pens = self.parsePens(payload);
       self.gauges = self.parseGaugeAttr(payload);
-      self.renderAxisChart();
+      self.renderChart();
       self.renderGauges();
       //Tell container we're ready for updates
       this.ready = true;
       self.update();
     },
-    getAxesData: function() {
+    getPenData: function() {
       // Pause updates until this one is processed
       this.ready = false;
       // Determine time range
@@ -133,18 +142,19 @@ typeSupportHelpers.push(wellpumptype = {
 
       // Build the list of attributes (pens) to be updated
       var attrIds = [];
-      this.axes.forEach((axis) => {
-        axis.attributes.forEach((attribute) => {
-          if (attribute.displayName == "Reactive Power") {
-            attrIds.push(attribute.id);
-          }
-        });
+      this.pens.forEach((attribute) => {
+        if (attribute.displayName == "Power Consumed") {
+          attrIds.push(attribute.id);
+        }
+        if (attribute.displayName == "Pressure") {
+          attrIds.push(attribute.id);
+        }
       });
       var attrIds = attrIds.join("\",\"");
-
+      logger.trace("attributes now: " + attrIds);
       //Make one history query for all attributes
       var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.typeName, this.processChartSamples.bind(this));
+      this.queryHelper(theQuery, this.processChartSamples.bind(this));
     },
     processChartSamples: function(payload, query) {
       console.log(payload);
@@ -154,22 +164,22 @@ typeSupportHelpers.push(wellpumptype = {
       { 
         for (var i=0, j=payload.data.getRawHistoryDataWithSampling.length; i<j; i++) {
           var element = payload.data.getRawHistoryDataWithSampling[i];
-          var useAxis = this.findAxisForAttribId(element.id, this.axes);
+          var useAxis = this.findAxisForAttribId(element.id, this.pens);
           if (useAxis != -1) {
-            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.axes, this.chartSampleCount);
+            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.pens, this.chartSampleCount);
             //find axis dataset in chart
             var found = false;
             for (var c=0;c<this.chartData.datasets.length;c++) {
               var dataSet=this.chartData.datasets[c];
-              if (dataSet.label == this.axes[useAxis].displayName) {
+              if (dataSet.label == this.pens[useAxis].displayName) {
                 //update dataset.data
-                dataSet.data = this.axes[useAxis].samples;
+                dataSet.data = this.pens[useAxis].samples;
                 logger.info("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
                 found = true;
               }
             }
             if (!found)
-              logger.warn("Could not find chart axis data to update " + this.axes[useAxis].displayName);
+              logger.warn("Could not find chart axis data to update " + this.pens[useAxis].displayName);
             //update chart!
             this.wellpumpChart.update();
           } else {
@@ -217,26 +227,20 @@ typeSupportHelpers.push(wellpumptype = {
         axis[index].timestamps.shift();
       }
     },
-    parseAxis:function(payload) {
-      var discoveredAxis = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var children = payload.data.equipment.childEquipment;
-        console.log(JSON.stringify(children))
-        if (children.length > 0) {
-          for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase().indexOf("phase") != -1) {
-                var child = children[c];
-                for (var d=0;d<child.attributes.length;d++) {
-                  if (child.attributes[d].displayName == "Reactive Power")
-                    discoveredAxis.push( {"displayName":child.displayName + " Reactive Power", "equipmentId": child.id, "attributes": child.attributes, "timestamps":[], "samples": []});
-                }
-              }
-            }
-          }
+    parsePens:function(payload) {
+      var discoveredPens = [];
+      if (payload && payload.data && payload.data.attributes) {
+        for (var c=0;c<payload.data.attributes.length;c++) {
+          var child = payload.data.attributes[c];
+          if (child.displayName == "Pressure")
+            discoveredPens.push( {"displayName":child.displayName, "equipmentId": child.id, "timestamps":[], "samples": []});
+          if (child.displayName == "Power Consumed")
+            discoveredPens.push( {"displayName":child.displayName, "equipmentId": child.id, "timestamps":[], "samples": []});
+        }
       } else {
         logger.error("Payload did not conform to Profile and cannot be rendered!");
       }
-      return discoveredAxis;
+      return discoveredPens;
     },
     getGaugeData() {
       var endtime = new Date(Date.now());
@@ -252,7 +256,7 @@ typeSupportHelpers.push(wellpumptype = {
 
       //Make one history query for all attributes
       var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHandler(theQuery, this.typeName, this.processGaugeSamples.bind(this));
+      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
     },
     processGaugeSamples: function(payload, query) {
       // Get gauge id from attribute
@@ -280,18 +284,16 @@ typeSupportHelpers.push(wellpumptype = {
     },
     parseGaugeAttr: function(payload) {
       var discoveredAttr = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        for (var i=0;i<payload.data.equipment.childEquipment.length;i++) {
-          var phase = payload.data.equipment.childEquipment[i];
-          if (phase) {
-              for (var d=0;d<phase.attributes.length;d++) {
-                if (phase.attributes[d].displayName == "Voltage")
-                discoveredAttr.push({attrid:phase.attributes[d].id, gauge:null, maxValue:800, name: phase.displayName + " Voltage"});
-              }
-            }
-          }
+      if (payload && payload.data && payload.data.attributes) {
+        for (var c=0;c<payload.data.attributes.length;c++) {
+          var child = payload.data.attributes[c];
+          if (child.displayName == "Run State")
+            discoveredAttr.push({attrid:child.id, gauge:null, maxValue:3, name: child.displayName });
+          if (child.displayName == "Control Mode")
+            discoveredAttr.push({attrid:child.id, gauge:null, maxValue:3, name: child.displayName });
         }
-        return discoveredAttr;
+      }
+      return discoveredAttr;
     },
     findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
       if (childEquipName == null || parentEquipment == null)
@@ -304,14 +306,14 @@ typeSupportHelpers.push(wellpumptype = {
       }
       return null;
     },
-    renderAxisChart: function() {
-      var chartRoot = document.getElementById('axisCanvas');
+    renderChart: function() {
+      var chartRoot = document.getElementById('penCanvas');
       this.chartData.datasets = [];
-      for (var x=0;x<this.axes.length;x++) {      
-        logger.info("pushing new axis to chart " + this.axes[x].displayName);
+      for (var x=0;x<this.pens.length;x++) {      
+        logger.info("pushing new axis to chart " + this.pens[x].displayName);
         useColor = this.chartColors;
         this.chartData.datasets.push({
-          label: this.axes[x].displayName,
+          label: this.pens[x].displayName,
           data: [],
           fill: false,
           backgroundColor: Object.values(useColor),
