@@ -126,6 +126,32 @@ typeSupportHelpers.push(cncbasetype = {
       this.ready = true;
       self.update();
     },
+    parseAxis:function(payload) {
+      var discoveredAxis = [];
+      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
+        var children = payload.data.equipment.childEquipment;
+        if (children.length > 0) {
+          for (var c=0;c<children.length;c++) {
+            if (children[c].displayName.toLowerCase() == "channellist") {
+              for (var d=0;d<children[c].childEquipment[0].childEquipment.length;d++) {
+                var child = children[c].childEquipment[0].childEquipment[d];
+                if (child != undefined && (child.displayName.toLowerCase() == "positionbcs" || child.displayName.toLowerCase() == "positionwcs")) {
+                  var axisList = child.childEquipment;
+                  for (var e=0;e<axisList.length;e++) {
+                    discoveredAxis.push( {"displayName":axisList[e].displayName, "equipmentId": axisList[e].id, "attributes": axisList[e].attributes, "timestamps":[], "samples": []});
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          logger.error("Payload did not include expected childEquipment, Axis cannot be rendered!");
+        }
+      } else {
+        logger.error("Payload did not conform to Profile and cannot be rendered!");
+      }
+      return discoveredAxis;
+    },
     getAxesData: function() {
       // Pause updates until this one is processed
       this.ready = false;
@@ -220,71 +246,32 @@ typeSupportHelpers.push(cncbasetype = {
         axis[index].timestamps.shift();
       }
     },
-    parseAxis:function(payload) {
-      var discoveredAxis = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var children = payload.data.equipment.childEquipment;
-        if (children.length > 0) {
-          for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase() == "channellist") {
-              for (var d=0;d<children[c].childEquipment[0].childEquipment.length;d++) {
-                var child = children[c].childEquipment[0].childEquipment[d];
-                if (child != undefined && (child.displayName.toLowerCase() == "positionbcs" || child.displayName.toLowerCase() == "positionwcs")) {
-                  var axisList = child.childEquipment;
-                  for (var e=0;e<axisList.length;e++) {
-                    discoveredAxis.push( {"displayName":axisList[e].displayName, "equipmentId": axisList[e].id, "attributes": axisList[e].attributes, "timestamps":[], "samples": []});
-                  }
-                }
-              }
+    renderAxisChart: function() {
+      var chartRoot = document.getElementById('axisCanvas');
+      this.chartData.datasets = [];
+      for (var x=0;x<this.axes.length;x++) {      
+        logger.info("pushing new axis to chart " + this.axes[x].displayName);
+        useColor = this.chartColors;
+        this.chartData.datasets.push({
+          label: this.axes[x].displayName,
+          data: [],
+          fill: false,
+          backgroundColor: Object.values(useColor),
+          borderColor: Object.values(useColor),
+          pointBackgroundColor: Object.values(useColor),
+        })
+      }
+      this.cncAxisChart = new Chart(chartRoot,{
+        type: 'line',
+        data: this.chartData,
+        options: {
+          elements: {
+            line: {
+              borderWidth: 3
             }
           }
-        } else {
-          logger.error("Payload did not include expected childEquipment, Axis cannot be rendered!");
-        }
-      } else {
-        logger.error("Payload did not conform to Profile and cannot be rendered!");
-      }
-      return discoveredAxis;
-    },
-    getGaugeData() {
-      var endtime = new Date(Date.now());
-      var starttime = new Date(endtime - 2000);
-      var datatype = 'floatvalue';
-
-      // Build the list of attributes (pens) to be updated
-      var attrIds = [];
-      this.gauges.forEach((gauge) => {
-        attrIds.push(gauge.attrid);
+        },
       });
-      var attrIds = attrIds.join("\",\"");
-
-      //Make one history query for all attributes
-      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
-    },
-    processGaugeSamples: function(payload, query) {
-      // Get gauge id from attribute
-      if (payload && payload.data && 
-          payload.data.getRawHistoryDataWithSampling && 
-          payload.data.getRawHistoryDataWithSampling.length > 0)
-      {  
-        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
-        //  However, it introduces inefficiency and we might add logic to throw away extra data
-        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
-          this.gauges.forEach((gauge, idx) => {
-            if (element.id == gauge.attrid) {
-              logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
-              this.gauges[idx].gauge.set(element.floatvalue);
-              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
-            }
-          })
-        });
-      } else {
-        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
-        if (payload["errors"] != undefined) {
-          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
-        }  
-      }
     },
     parseGaugeAttr: function(payload) {
       var discoveredAttr = [];
@@ -326,6 +313,46 @@ typeSupportHelpers.push(cncbasetype = {
       }
       return discoveredAttr;
     },
+    getGaugeData() {
+      var endtime = new Date(Date.now());
+      var starttime = new Date(endtime - 2000);
+      var datatype = 'floatvalue';
+
+      // Build the list of attributes (pens) to be updated
+      var attrIds = [];
+      this.gauges.forEach((gauge) => {
+        attrIds.push(gauge.attrid);
+      });
+      var attrIds = attrIds.join("\",\"");
+
+      //Make one history query for all attributes
+      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
+    },
+    processGaugeSamples: function(payload, query) {
+      // Get gauge id from attribute
+      if (payload && payload.data && 
+          payload.data.getRawHistoryDataWithSampling && 
+          payload.data.getRawHistoryDataWithSampling.length > 0)
+      {  
+        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
+        //  However, it introduces inefficiency and we might add logic to throw away extra data
+        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
+          this.gauges.forEach((gauge, idx) => {
+            if (element.id == gauge.attrid) {
+              logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
+              this.gauges[idx].gauge.set(element.floatvalue);
+              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
+            }
+          })
+        });
+      } else {
+        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
+        if (payload["errors"] != undefined) {
+          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        }  
+      }
+    },
     findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
       if (childEquipName == null || parentEquipment == null)
         return null;
@@ -336,33 +363,6 @@ typeSupportHelpers.push(cncbasetype = {
         }
       }
       return null;
-    },
-    renderAxisChart: function() {
-      var chartRoot = document.getElementById('axisCanvas');
-      this.chartData.datasets = [];
-      for (var x=0;x<this.axes.length;x++) {      
-        logger.info("pushing new axis to chart " + this.axes[x].displayName);
-        useColor = this.chartColors;
-        this.chartData.datasets.push({
-          label: this.axes[x].displayName,
-          data: [],
-          fill: false,
-          backgroundColor: Object.values(useColor),
-          borderColor: Object.values(useColor),
-          pointBackgroundColor: Object.values(useColor),
-        })
-      }
-      this.cncAxisChart = new Chart(chartRoot,{
-        type: 'line',
-        data: this.chartData,
-        options: {
-          elements: {
-            line: {
-              borderWidth: 3
-            }
-          }
-        },
-      });
     },
     renderGauges: function() {
       var gaugesRoot = document.getElementById("gaugesDiv");

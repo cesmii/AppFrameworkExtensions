@@ -125,6 +125,27 @@ typeSupportHelpers.push(powermonitorType = {
       this.ready = true;
       self.update();
     },
+    parseAxis:function(payload) {
+      var discoveredAxis = [];
+      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
+        var children = payload.data.equipment.childEquipment;
+        console.log(JSON.stringify(children))
+        if (children.length > 0) {
+          for (var c=0;c<children.length;c++) {
+            if (children[c].displayName.toLowerCase().indexOf("phase") != -1) {
+                var child = children[c];
+                for (var d=0;d<child.attributes.length;d++) {
+                  if (child.attributes[d].displayName == "Reactive Power")
+                    discoveredAxis.push( {"displayName":child.displayName + " Reactive Power", "equipmentId": child.id, "attributes": child.attributes, "timestamps":[], "samples": []});
+                }
+              }
+            }
+          }
+      } else {
+        logger.error("Payload did not conform to Profile and cannot be rendered!");
+      }
+      return discoveredAxis;
+    },
     getAxesData: function() {
       // Pause updates until this one is processed
       this.ready = false;
@@ -220,26 +241,47 @@ typeSupportHelpers.push(powermonitorType = {
         axis[index].timestamps.shift();
       }
     },
-    parseAxis:function(payload) {
-      var discoveredAxis = [];
+    renderAxisChart: function() {
+      var chartRoot = document.getElementById('axisCanvas');
+      this.chartData.datasets = [];
+      for (var x=0;x<this.axes.length;x++) {      
+        logger.info("pushing new axis to chart " + this.axes[x].displayName);
+        useColor = this.chartColors;
+        this.chartData.datasets.push({
+          label: this.axes[x].displayName,
+          data: [],
+          fill: false,
+          backgroundColor: Object.values(useColor),
+          borderColor: Object.values(useColor),
+          pointBackgroundColor: Object.values(useColor),
+        })
+      }
+      this.powermonitorAxisChart = new Chart(chartRoot,{
+        type: 'line',
+        data: this.chartData,
+        options: {
+          elements: {
+            line: {
+              borderWidth: 3
+            }
+          }
+        },
+      });
+    },
+    parseGaugeAttr: function(payload) {
+      var discoveredAttr = [];
       if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var children = payload.data.equipment.childEquipment;
-        console.log(JSON.stringify(children))
-        if (children.length > 0) {
-          for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase().indexOf("phase") != -1) {
-                var child = children[c];
-                for (var d=0;d<child.attributes.length;d++) {
-                  if (child.attributes[d].displayName == "Reactive Power")
-                    discoveredAxis.push( {"displayName":child.displayName + " Reactive Power", "equipmentId": child.id, "attributes": child.attributes, "timestamps":[], "samples": []});
-                }
+        for (var i=0;i<payload.data.equipment.childEquipment.length;i++) {
+          var phase = payload.data.equipment.childEquipment[i];
+          if (phase) {
+              for (var d=0;d<phase.attributes.length;d++) {
+                if (phase.attributes[d].displayName == "Voltage")
+                discoveredAttr.push({attrid:phase.attributes[d].id, gauge:null, maxValue:800, name: phase.displayName + " Voltage"});
               }
             }
           }
-      } else {
-        logger.error("Payload did not conform to Profile and cannot be rendered!");
-      }
-      return discoveredAxis;
+        }
+        return discoveredAttr;
     },
     getGaugeData() {
       var endtime = new Date(Date.now());
@@ -281,21 +323,6 @@ typeSupportHelpers.push(powermonitorType = {
         }  
       }
     },
-    parseGaugeAttr: function(payload) {
-      var discoveredAttr = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        for (var i=0;i<payload.data.equipment.childEquipment.length;i++) {
-          var phase = payload.data.equipment.childEquipment[i];
-          if (phase) {
-              for (var d=0;d<phase.attributes.length;d++) {
-                if (phase.attributes[d].displayName == "Voltage")
-                discoveredAttr.push({attrid:phase.attributes[d].id, gauge:null, maxValue:800, name: phase.displayName + " Voltage"});
-              }
-            }
-          }
-        }
-        return discoveredAttr;
-    },
     findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
       if (childEquipName == null || parentEquipment == null)
         return null;
@@ -306,33 +333,6 @@ typeSupportHelpers.push(powermonitorType = {
         }
       }
       return null;
-    },
-    renderAxisChart: function() {
-      var chartRoot = document.getElementById('axisCanvas');
-      this.chartData.datasets = [];
-      for (var x=0;x<this.axes.length;x++) {      
-        logger.info("pushing new axis to chart " + this.axes[x].displayName);
-        useColor = this.chartColors;
-        this.chartData.datasets.push({
-          label: this.axes[x].displayName,
-          data: [],
-          fill: false,
-          backgroundColor: Object.values(useColor),
-          borderColor: Object.values(useColor),
-          pointBackgroundColor: Object.values(useColor),
-        })
-      }
-      this.powermonitorAxisChart = new Chart(chartRoot,{
-        type: 'line',
-        data: this.chartData,
-        options: {
-          elements: {
-            line: {
-              borderWidth: 3
-            }
-          }
-        },
-      });
     },
     renderGauges: function() {
       var gaugesRoot = document.getElementById("gaugesDiv");

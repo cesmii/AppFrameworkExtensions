@@ -28,6 +28,26 @@ typeSupportHelpers.push(wellpumptype = {
       ],
       datasets: [],
     },
+    /* Define data presentations */
+    trends: {
+      power_consumed: {},
+      pressure: {}
+    },
+    /* Ideally these enumerations would come from the platform, but its not currently supported through GraphQL */
+    indicators: {
+      control_mode: {
+        2: "Auto",
+        1: "Manual",
+        0: "Off"
+      },
+      run_state : {
+        3: "Running",
+        2: "De-Accelerating",
+        1: "Accelerating",
+        0: "Stopped"
+      }
+    },
+    /* Configure gauges */
     gaugeOpts: {
       angle: -0.02, // The span of the gauge arc
       lineWidth: 0.44, // The line thickness
@@ -101,7 +121,7 @@ typeSupportHelpers.push(wellpumptype = {
       if (this.ready) {
         logger.info("Processing update request on WellPump detail pane at " + new Date().toString());
         this.getPenData();
-        //this.getGaugeData();
+        this.getGaugeData();
       } else {
         logger.info("Ignoring update request on WellPump detail pane since not ready");
       }
@@ -131,6 +151,19 @@ typeSupportHelpers.push(wellpumptype = {
       this.ready = true;
       self.update();
     },
+    parsePens:function(payload) {
+      var discoveredPens = [];
+      if (payload && payload.data && payload.data.attributes) {
+        for (var c=0;c<payload.data.attributes.length;c++) {
+          var child = payload.data.attributes[c];
+          if (Object.keys(this.trends).indexOf(child.relativeName) != -1)
+            discoveredPens.push( {"id": child.id, "displayName": child.displayName, "relativeName": child.relativeName, "timestamps":[], "samples": []} );
+        }
+      } else {
+        logger.error("Payload did not conform to Profile and cannot be rendered!");
+      }
+      return discoveredPens;
+    },
     getPenData: function() {
       // Pause updates until this one is processed
       this.ready = false;
@@ -142,44 +175,40 @@ typeSupportHelpers.push(wellpumptype = {
 
       // Build the list of attributes (pens) to be updated
       var attrIds = [];
-      this.pens.forEach((attribute) => {
-        if (attribute.displayName == "Power Consumed") {
-          attrIds.push(attribute.id);
-        }
-        if (attribute.displayName == "Pressure") {
-          attrIds.push(attribute.id);
+      this.pens.forEach((pen) => {
+        if (Object.keys(this.trends).indexOf(pen.relativeName) != -1) {
+          attrIds.push(pen.id);
         }
       });
       var attrIds = attrIds.join("\",\"");
-      logger.trace("attributes now: " + attrIds);
       //Make one history query for all attributes
       var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
       this.queryHelper(theQuery, this.processChartSamples.bind(this));
     },
     processChartSamples: function(payload, query) {
-      console.log(payload);
+      //logger.trace(payload);
       if (payload && payload.data && 
         payload.data.getRawHistoryDataWithSampling && 
         payload.data.getRawHistoryDataWithSampling.length > 0)
       { 
         for (var i=0, j=payload.data.getRawHistoryDataWithSampling.length; i<j; i++) {
           var element = payload.data.getRawHistoryDataWithSampling[i];
-          var useAxis = this.findAxisForAttribId(element.id, this.pens);
-          if (useAxis != -1) {
-            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.pens, this.chartSampleCount);
+          var usePen = this.findPenForAttribId(element.id, this.pens);
+          if (usePen != -1) {
+            this.shiftPenSampleWindow(element.ts, element.floatvalue, usePen, this.pens, this.chartSampleCount);
             //find axis dataset in chart
             var found = false;
             for (var c=0;c<this.chartData.datasets.length;c++) {
               var dataSet=this.chartData.datasets[c];
-              if (dataSet.label == this.pens[useAxis].displayName) {
+              if (dataSet.label == this.pens[usePen].displayName) {
                 //update dataset.data
-                dataSet.data = this.pens[useAxis].samples;
+                dataSet.data = this.pens[usePen].samples;
                 logger.info("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
                 found = true;
               }
             }
             if (!found)
-              logger.warn("Could not find chart axis data to update " + this.pens[useAxis].displayName);
+              logger.warn("Could not find chart axis data to update " + this.pens[usePen].displayName);
             //update chart!
             this.wellpumpChart.update();
           } else {
@@ -195,122 +224,38 @@ typeSupportHelpers.push(wellpumptype = {
       }
       this.ready = true;
     },
-    findAxisForAttribId:function(attribId, axes) {
-      for(var x=0;x<axes.length;x++) {
-        if (axes[x].attributes) {
-          var attribs = axes[x].attributes
-          for(var a=0;a<attribs.length;a++) {
-            if (attribs[a].id == attribId) {
-              return x;
-            }
-          }
+    findPenForAttribId:function(attribId, pens) {
+      for(var x=0;x<pens.length;x++) {
+        if (pens[x].id == attribId) {
+          return x;
         }
       }
       return -1;
     },
-    shiftAxisSampleWindow:function(ts, value, index, axis, count) {
+    shiftPenSampleWindow:function(ts, value, index, pens, count) {
       //Rules:
       // #1 Keep timestamps and samples aligned!
       // #2 Don't push if timestamp is the same as previous time stamp
       //     Note: Comparing times is hell in Javascript, turn them into strings
       var ts1 = "T" + ts;
-      var ts2 = "T" + axis[index].timestamps[axis[index].timestamps.length-1];
+      var ts2 = "T" + pens[index].timestamps[pens[index].timestamps.length-1];
       //if (ts1 != ts2) {
-        axis[index].samples.push(value);
-        axis[index].timestamps.push(ts);  
+        pens[index].samples.push(value);
+        pens[index].timestamps.push(ts);  
       //} else {
       //  logger.info("Not charting repeated timestamp!");
       //}
       // #3 Keep number of charted samples below count
-      if (axis[index].samples.length > count) { 
-        axis[index].samples.shift();
-        axis[index].timestamps.shift();
+      if (pens[index].samples.length > count) { 
+        pens[index].samples.shift();
+        pens[index].timestamps.shift();
       }
-    },
-    parsePens:function(payload) {
-      var discoveredPens = [];
-      if (payload && payload.data && payload.data.attributes) {
-        for (var c=0;c<payload.data.attributes.length;c++) {
-          var child = payload.data.attributes[c];
-          if (child.displayName == "Pressure")
-            discoveredPens.push( {"displayName":child.displayName, "equipmentId": child.id, "timestamps":[], "samples": []});
-          if (child.displayName == "Power Consumed")
-            discoveredPens.push( {"displayName":child.displayName, "equipmentId": child.id, "timestamps":[], "samples": []});
-        }
-      } else {
-        logger.error("Payload did not conform to Profile and cannot be rendered!");
-      }
-      return discoveredPens;
-    },
-    getGaugeData() {
-      var endtime = new Date(Date.now());
-      var starttime = new Date(endtime - 2000);
-      var datatype = 'floatvalue';
-
-      // Build the list of attributes (pens) to be updated
-      var attrIds = [];
-      this.gauges.forEach((gauge) => {
-        attrIds.push(gauge.attrid);
-      });
-      var attrIds = attrIds.join("\",\"");
-
-      //Make one history query for all attributes
-      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
-    },
-    processGaugeSamples: function(payload, query) {
-      // Get gauge id from attribute
-      if (payload && payload.data && 
-          payload.data.getRawHistoryDataWithSampling && 
-          payload.data.getRawHistoryDataWithSampling.length > 0)
-      {  
-        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
-        //  However, it introduces inefficiency and we might add logic to throw away extra data
-        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
-          this.gauges.forEach((gauge, idx) => {
-            if (element.id == gauge.attrid) {
-              logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
-              this.gauges[idx].gauge.set(element.floatvalue);
-              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
-            }
-          })
-        });
-      } else {
-        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
-        if (payload["errors"] != undefined) {
-          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
-        }  
-      }
-    },
-    parseGaugeAttr: function(payload) {
-      var discoveredAttr = [];
-      if (payload && payload.data && payload.data.attributes) {
-        for (var c=0;c<payload.data.attributes.length;c++) {
-          var child = payload.data.attributes[c];
-          if (child.displayName == "Run State")
-            discoveredAttr.push({attrid:child.id, gauge:null, maxValue:3, name: child.displayName });
-          if (child.displayName == "Control Mode")
-            discoveredAttr.push({attrid:child.id, gauge:null, maxValue:3, name: child.displayName });
-        }
-      }
-      return discoveredAttr;
-    },
-    findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
-      if (childEquipName == null || parentEquipment == null)
-        return null;
-      var children = parentEquipment.childEquipment;
-      for (var c=0;c<children.length;c++) {
-        if (children[c].displayName.toLowerCase() == childEquipName.toLowerCase()) {
-          return children[c];
-        }
-      }
-      return null;
     },
     renderChart: function() {
       var chartRoot = document.getElementById('penCanvas');
       this.chartData.datasets = [];
       for (var x=0;x<this.pens.length;x++) {      
-        logger.info("pushing new axis to chart " + this.pens[x].displayName);
+        logger.info("pushing new pen to chart " + this.pens[x].displayName);
         useColor = this.chartColors;
         this.chartData.datasets.push({
           label: this.pens[x].displayName,
@@ -333,6 +278,77 @@ typeSupportHelpers.push(wellpumptype = {
         },
       });
     },
+    parseGaugeAttr: function(payload) {
+      var discoveredAttr = [];
+      if (payload && payload.data && payload.data.attributes) {
+        for (var c=0;c<payload.data.attributes.length;c++) {
+          var child = payload.data.attributes[c];
+          if (Object.keys(this.indicators).indexOf(child.relativeName) != -1) {
+            gaugeMax = Object.keys(this.indicators[child.relativeName]).length -1;
+            discoveredAttr.push( { id:child.id, gauge:null, maxValue:gaugeMax, relativeName: child.relativeName, displayName:child.displayName } );
+          }
+        }
+      }
+      return discoveredAttr;
+    },
+    getGaugeData() {
+      // Pause updates until this one is processed
+      this.ready = false;
+      // Determine time range
+      var endtime = new Date(Date.now());
+      var two_hours_ms = 1*10*60*1000 ;
+      var starttime = new Date(endtime - two_hours_ms);
+      var datatype = 'intvalue';
+      // Build the list of attributes (pens) to be updated
+      var attrIds = [];
+      var test = 0;
+      this.gauges.forEach((gauge) => {
+        //if (test == 0) {
+          attrIds.push(gauge.id);
+          test = 1;
+        //}
+      });
+      var attrIds = attrIds.join("\",\"");
+
+      //Make one history query for all attributes
+      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
+      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
+    },
+    processGaugeSamples: function(payload, query) {
+      // Get gauge id from attribute
+      if (payload && payload.data && 
+          payload.data.getRawHistoryDataWithSampling && 
+          payload.data.getRawHistoryDataWithSampling.length > 0)
+      {  
+        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
+        //  However, it introduces inefficiency and we might add logic to throw away extra data
+        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
+          this.gauges.forEach((gauge, idx) => {
+            if (element.id == gauge.id) {
+              this.gauges[idx].gauge.set(element.intvalue);
+              var label = this.indicators[gauge.relativeName][element.intvalue];
+              document.getElementById(`gauge${idx}Value`).innerText = label;
+            }
+          })
+        });
+      } else {
+        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
+        if (payload["errors"] != undefined) {
+          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
+        }  
+      }
+    },
+    findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
+      if (childEquipName == null || parentEquipment == null)
+        return null;
+      var children = parentEquipment.childEquipment;
+      for (var c=0;c<children.length;c++) {
+        if (children[c].displayName.toLowerCase() == childEquipName.toLowerCase()) {
+          return children[c];
+        }
+      }
+      return null;
+    },
     renderGauges: function() {
       var gaugesRoot = document.getElementById("gaugesDiv");
       this.gauges.forEach((gauge, idx) => {
@@ -342,7 +358,7 @@ typeSupportHelpers.push(wellpumptype = {
             gaugeDiv.setAttribute("class", "wellpumptype-gauge");
             var gaugeLabel = document.createElement("div");
             gaugeLabel.id = `gauge${idx}Label`;
-            gaugeLabel.innerText = gauge.name;
+            gaugeLabel.innerText = gauge.displayName;
             gaugeLabel.setAttribute("class", "wellpumptype-gaugelabel");
             gaugeDiv.appendChild(gaugeLabel);
             var gaugeCanvas = document.createElement("canvas");
