@@ -1,5 +1,5 @@
 //The name of your type (in this case, example) should match your TypeSupport folder name
-typeSupport.machineTypes.cncbasetype = {
+typeSupport.machineTypes.CNCBaseType = {
     "name": "CNC Base Type",
     "icon": "cncbasetype.png",
     "script": "cncbasetype.js",
