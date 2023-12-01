@@ -1,6 +1,6 @@
 typeSupportHelpers.push(powermonitorType = {
     /* IDetailPane Interface Properties */
-    typeName: "powermonitortype",
+    typeName: "PowerMonitorType",
     rootElement: null,
     instanceId: null,
     queryHelper: null,

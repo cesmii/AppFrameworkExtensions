@@ -1,6 +1,6 @@
 typeSupportHelpers.push(cncbasetype = {
     /* IDetailPane Interface Properties */
-    typeName: "cncbasetype",
+    typeName: "CNCBaseType",
     rootElement: null,
     instanceId: null,
     queryHelper: null,
