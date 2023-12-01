@@ -1,4 +1,3 @@
-//The name of your type (in this case, example) should match your TypeSupport folder name
 typeSupport.machineTypes.CNCBaseType = {
     "name": "CNC Base Type",
     "icon": "cncbasetype.png",
