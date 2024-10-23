@@ -1,0 +1,31 @@
+
+.cnchighbytetype {
+/* machine type specific overrides */
+}
+.cnchighbytetype.updating {
+/* machine type specific overrides */
+}
+.cnchighbytetype-chart {
+    border:1px dotted lightblue; max-height:400px;
+}
+.cnchighbytetype-chartcanvas {
+    max-height: 400px;
+}
+.cnchighbytetype-gauge {
+    border:1px dotted gray; max-height:200px;
+    display: inline-block;
+}
+.cnchighbytetype-gaugelabel {
+    margin-top: 10px;
+    color: rgb(61, 61, 61);
+    width:100%;
+    text-align: center;
+}
+.cnchighbytetype-gaugevalue {
+    color: rgb(61, 61, 61);
+    width:100%;
+    text-align: center;
+    text-shadow: 1px 1px 2px white;
+    margin-top: -80px;
+    margin-bottom: 50px;
+}
