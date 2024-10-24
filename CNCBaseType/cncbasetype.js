@@ -67,7 +67,7 @@ typeSupportHelpers.push(cncbasetype = {
         referrerpolicy:"no-referrer"
       }, () => {
         /*add elements to DOM once dependency scripts are loaded*/
-        logger.info("Dependencies loaded for cbcbasetype, initializing UI.")
+        logger.info("Dependencies loaded for cncbasetype, initializing UI.")
         this.rootElement = appFramework.validateRootElement(rootElement);
         if (this.rootElement) {  
           if (document.getElementById("gaugesDiv") == null) {

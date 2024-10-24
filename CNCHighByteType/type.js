@@ -1,3 +1,4 @@
+include("TypeSupport/cnchighbytetype/highbytehelper.js");
 typeSupport.machineTypes.cnchighbytetype = {
     "name": "CNC HighByte Type",
     "icon": "cnchighbytetype.png",

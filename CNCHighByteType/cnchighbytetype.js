@@ -1,12 +1,12 @@
-typeSupportHelpers.push(cncbasetype = {
+typeSupportHelpers.push(cnchighbitetype = {
     /* IDetailPane Interface Properties */
-    typeName: "CNCBaseType",
+    typeName: "cnchighbytetype",
     rootElement: null,
     instanceId: null,
     queryHelper: null,
 
     /* Private implementation-specific properties */
-    ready: true,
+    ready: false,
     cncAxisChart: null,
     gauges: [],
     chartSampleCount: 10,
@@ -58,7 +58,7 @@ typeSupportHelpers.push(cncbasetype = {
 
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
-      logger.info("Activating cncbasetype detail pane!");
+      logger.info("Activating cnchighbytetype detail pane!");
       include("TypeSupport/cnchighbytetype/gauge.js");
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
@@ -78,27 +78,30 @@ typeSupportHelpers.push(cncbasetype = {
           if (document.getElementById("axisData") == null) {
             var chartDiv = document.createElement("div");
             chartDiv.id = "axisData";
-            chartDiv.setAttribute("class", "cncbasetype-chart");
+            chartDiv.setAttribute("class", "cnchighbytetype-chart");
             var chartCanvas = document.createElement("canvas");
             chartCanvas.id = "axisCanvas";
-            chartCanvas.setAttribute("class", "cncbasetype-chartcanvas");
+            chartCanvas.setAttribute("class", "cnchighbytetype-chartcanvas");
             chartDiv.appendChild(chartCanvas);
             this.rootElement.appendChild(chartDiv);
           }
-          this.queryHelper(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
+          //this.queryHelper(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
+
         }
       });
     },
     loadMachines: function(callBack) {
-      this.queryHelper(smip.queries.getEquipmentsByTypeName(this.typeName, config.app.modelParentId), callBack.bind(this));
+      logger.info("Calling HighByte helper!");
+      highbyteHelper.getInstances(this.typeName, callBack);
+      this.ready = true;
     },
     update: function() {
       if (this.ready) {
-        logger.info("Processing update request on CNC detail pane at " + new Date().toString());
-        this.getAxesData();
-        this.getGaugeData();
+        logger.info("Processing update request on HighByte CNC detail pane at " + new Date().toString());
+        //this.getAxesData();
+        //this.getGaugeData();
       } else {
-        logger.info("Ignoring update request on CNC detail pane since not ready");
+        logger.info("Ignoring update request on HighByte CNC detail pane since not ready");
       }
     },
     destroy: function() {
@@ -370,20 +373,20 @@ typeSupportHelpers.push(cncbasetype = {
         if (document.getElementById(`gauge${idx}Div`) == null) {
             var gaugeDiv = document.createElement("div");
             gaugeDiv.id = `gauge${idx}Div`;
-            gaugeDiv.setAttribute("class", "cncbasetype-gauge");
+            gaugeDiv.setAttribute("class", "cnchighbytetype-gauge");
             var gaugeLabel = document.createElement("div");
             gaugeLabel.id = `gauge${idx}Label`;
             gaugeLabel.innerText = gauge.name;
-            gaugeLabel.setAttribute("class", "cncbasetype-gaugelabel");
+            gaugeLabel.setAttribute("class", "cnchighbytetype-gaugelabel");
             gaugeDiv.appendChild(gaugeLabel);
             var gaugeCanvas = document.createElement("canvas");
             gaugeCanvas.id = `gauge${idx}Canvas`;
-            gaugeCanvas.setAttribute("class", "cncbasetype-gaugecanvas");
+            gaugeCanvas.setAttribute("class", "cnchighbytetype-gaugecanvas");
             gaugeDiv.appendChild(gaugeCanvas);
             var gaugeValue = document.createElement("div");
             gaugeValue.id = `gauge${idx}Value`;
             gaugeValue.innerText = "0";
-            gaugeValue.setAttribute("class", "cncbasetype-gaugevalue");
+            gaugeValue.setAttribute("class", "cnchighbytetype-gaugevalue");
             gaugeDiv.appendChild(gaugeValue);
             gaugesRoot.appendChild(gaugeDiv);
           }
