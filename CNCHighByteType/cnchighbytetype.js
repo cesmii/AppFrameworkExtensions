@@ -59,7 +59,7 @@ typeSupportHelpers.push(cncbasetype = {
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
       logger.info("Activating cncbasetype detail pane!");
-      include("TypeSupport/CNCBaseType/gauge.js");
+      include("TypeSupport/cnchighbytetype/gauge.js");
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
         integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",

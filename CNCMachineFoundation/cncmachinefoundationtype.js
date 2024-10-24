@@ -59,10 +59,10 @@ typeSupportHelpers.push(cncmachinefoundationtype = {
     /* IDetailPane Interface Methods */
     create: function(rootElement) {
       logger.info("Activating cncmachinefoundation detail pane!");
-      include("TypeSupport/CNCMachineFoundation/gauge.js");
+      include("TypeSupport/cncmachinefoundation/gauge.js");
       include({ 
         src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
-        integrity: "sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
+        integrity: "sha512-ElRFoEQdI5Ht6kvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
         crossOrigin: "anonymous",
         referrerpolicy:"no-referrer"
       }, () => {
