@@ -67,7 +67,7 @@ typeSupportHelpers.push(cnchighbitetype = {
         referrerpolicy:"no-referrer"
       }, () => {
         /*add elements to DOM once dependency scripts are loaded*/
-        logger.info("Dependencies loaded for cbcbasetype, initializing UI.")
+        logger.info("Dependencies loaded for cnchighbytetype, initializing UI.")
         this.rootElement = appFramework.validateRootElement(rootElement);
         if (this.rootElement) {  
           if (document.getElementById("gaugesDiv") == null) {
@@ -85,8 +85,7 @@ typeSupportHelpers.push(cnchighbitetype = {
             chartDiv.appendChild(chartCanvas);
             this.rootElement.appendChild(chartDiv);
           }
-          //this.queryHelper(smip.queries.getEquipmentChildren(this.instanceId), this.renderUI);
-
+          highbyteHelper.getInstanceData(this.typeName, this.instanceId, this.renderUI.bind(this));
         }
       });
     },
@@ -98,8 +97,7 @@ typeSupportHelpers.push(cnchighbitetype = {
     update: function() {
       if (this.ready) {
         logger.info("Processing update request on HighByte CNC detail pane at " + new Date().toString());
-        //this.getAxesData();
-        //this.getGaugeData();
+        highbyteHelper.getInstanceData(this.typeName, this.instanceId, this.processUpdateData.bind(this));
       } else {
         logger.info("Ignoring update request on HighByte CNC detail pane since not ready");
       }
@@ -120,113 +118,31 @@ typeSupportHelpers.push(cnchighbitetype = {
     },
 
     /* Private implementation-specific methods */
-    renderUI: function(payload, query, self) {
-      self.axes = self.parseAxis(payload);
-      self.gauges = self.parseGaugeAttr(payload);
-      self.renderAxisChart();
-      self.renderGauges();
+    renderUI: function(payload, query) {
+      logger.info("cncnhighbytetype parsing payload: " + JSON.stringify(payload));
+      this.axes = this.parseAxis(payload);
+      this.gauges = this.parseGaugeAttr(payload);
+      this.renderAxisChart();
+      this.renderGauges();
       //Tell container we're ready for updates
       this.ready = true;
-      self.update();
+      this.update();
     },
     parseAxis:function(payload) {
       var discoveredAxis = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var children = payload.data.equipment.childEquipment;
-        if (children.length > 0) {
-          for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase() == "channellist") {
-              for (var d=0;d<children[c].childEquipment[0].childEquipment.length;d++) {
-                var child = children[c].childEquipment[0].childEquipment[d];
-                if (child != undefined && (child.displayName.toLowerCase() == "positionbcs" || child.displayName.toLowerCase() == "positionwcs")) {
-                  var axisList = child.childEquipment;
-                  for (var e=0;e<axisList.length;e++) {
-                    discoveredAxis.push( {"displayName":axisList[e].displayName, "equipmentId": axisList[e].id, "attributes": axisList[e].attributes, "timestamps":[], "samples": []});
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          logger.error("Payload did not include expected childEquipment, Axis cannot be rendered!");
+      if (payload && payload.AxisList && Array.isArray(payload.AxisList)) {
+        for (var c=0;c<payload.AxisList.length;c++) {
+          axis = payload.AxisList[c];
+          logger.info("parsing axis: " + JSON.stringify(axis));
+          discoveredAxis.push( {"displayName":axis.Id, "equipmentId": axis.Id, "attributes": null, "timestamps":[], "samples": []});
         }
-      } else {
-        logger.error("Payload did not conform to Profile and cannot be rendered!");
       }
       return discoveredAxis;
     },
-    getAxesData: function() {
-      // Pause updates until this one is processed
-      this.ready = false;
-      // Determine time range
-      var endtime = new Date(Date.now());
-      var two_hours_ms = 2*60*60*1000 ;
-      var starttime = new Date(endtime - two_hours_ms);
-      var datatype = "floatvalue";
-
-      // Build the list of attributes (pens) to be updated
-      var attrIds = [];
-      this.axes.forEach((axis) => {
-        axis.attributes.forEach((attribute) => {
-          if (attribute.displayName == "ActualPosition") {
-            attrIds.push(attribute.id);
-          }
-        });
-      });
-      var attrIds = attrIds.join("\",\"");
-
-      //Make one history query for all attributes
-      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHelper(theQuery, this.processChartSamples.bind(this));
-    },
-    processChartSamples: function(payload, query) {
-      if (payload && payload.data && 
-        payload.data.getRawHistoryDataWithSampling && 
-        payload.data.getRawHistoryDataWithSampling.length > 0)
-      { 
-        for (var i=0, j=payload.data.getRawHistoryDataWithSampling.length; i<j; i++) {
-          var element = payload.data.getRawHistoryDataWithSampling[i];
-          var useAxis = this.findAxisForAttribId(element.id, this.axes);
-          if (useAxis != -1) {
-            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.axes, this.chartSampleCount);
-            //find axis dataset in chart
-            var found = false;
-            for (var c=0;c<this.chartData.datasets.length;c++) {
-              var dataSet=this.chartData.datasets[c];
-              if (dataSet.label == this.axes[useAxis].displayName) {
-                //update dataset.data
-                dataSet.data = this.axes[useAxis].samples;
-                logger.info("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
-                found = true;
-              }
-            }
-            if (!found)
-              logger.warn("Could not find chart axis data to update " + this.axes[useAxis].displayName);
-            //update chart!
-            this.cncAxisChart.update();
-          } else {
-            logger.warn("Could not find axis for sample data!");
-          }
-        }
-      }
-      else {
-        logger.warn("The SMIP returned no parseable axis data for the queried time window.");
-        if (payload["errors"] != undefined) {
-          logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
-        }  
-      }
-      this.ready = true;
-    },
-    findAxisForAttribId:function(attribId, axes) {
-      for(var x=0;x<axes.length;x++) {
-        if (axes[x].attributes) {
-          var attribs = axes[x].attributes
-          for(var a=0;a<attribs.length;a++) {
-            if (attribs[a].id == attribId) {
-              return x;
-            }
-          }
-        }
+    findAxisForId:function(axisId, axes) {
+      for(var x=0;x<axes.length;x++) { 
+        if (axes[x].equipmentId == axisId)
+          return x;
       }
       return -1;
     },
@@ -278,94 +194,72 @@ typeSupportHelpers.push(cnchighbitetype = {
     },
     parseGaugeAttr: function(payload) {
       var discoveredAttr = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var spindleList = this.findChildEquipmentByDisplayName("SpindleList", payload.data.equipment);
-        var q = this.findChildEquipmentByDisplayName("Q", spindleList);
-        var motor = this.findChildEquipmentByDisplayName("Motor", q);
-        if (motor != null) {
-          for (var d=0;d<motor.attributes.length;d++) {
-            if (motor.attributes[d].displayName == "LoadRate")
-              discoveredAttr.push({attrid:motor.attributes[d].id, gauge:null, maxValue:100, name: "Motor"});
-          }
-        } else {
-          logger.warn("CNC motor could not be found!");
+
+      if (payload && payload.SpindleList && Array.isArray(payload.SpindleList)) {
+        for (var c=0;c<payload.SpindleList.length;c++) {
+          spindle = payload.SpindleList[c];
+          logger.info("parsing spindle: " + JSON.stringify(spindle));
+          if (spindle.Id && spindle.Motor && spindle.Motor.LoadRate)
+            discoveredAttr.push({attrid:"LoadRate", gauge:null, maxValue:100, name: "Load Rate"});
+          if (spindle.Id && spindle.Motor && spindle.Motor.RPM)
+            discoveredAttr.push({attrid:"RPM", gauge:null, maxValue:100, name: "RPM"});
         }
-        var machineInfo = this.findChildEquipmentByDisplayName("MachineInformation", payload.data.equipment);
-        var toolInfo = this.findChildEquipmentByDisplayName("ToolInformation", machineInfo);
-        var toolStatus = this.findChildEquipmentByDisplayName("ToolStatus", toolInfo);
-        var feedRate = this.findChildEquipmentByDisplayName("Feedrate", toolStatus);
-        if (feedRate != null) {
-          for (var d=0;d<feedRate.attributes.length;d++) {
-            if (feedRate.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:feedRate.attributes[d].id, gauge:null, maxValue:100, name: "Feed Rate"});
-          }    
-        } else {
-          logger.warn("CNC Feedrate could not be found!");
-        }
-        var rpm = this.findChildEquipmentByDisplayName("RPM", toolStatus);
-        if (rpm != null) {
-          for (var d=0;d<rpm.attributes.length;d++) {
-            if (rpm.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:rpm.attributes[d].id, gauge:null, maxValue:100, name: "RPM"});
-          }    
-        } else {
-          logger.warn("CNC RPM could not be found!");
-        }
-      } else {
-        logger.error("Payload did not include expected childEquipment, Gauges cannot be rendered!");
       }
       return discoveredAttr;
     },
-    getGaugeData() {
-      var endtime = new Date(Date.now());
-      var starttime = new Date(endtime - 2000);
-      var datatype = 'floatvalue';
-
-      // Build the list of attributes (pens) to be updated
-      var attrIds = [];
-      this.gauges.forEach((gauge) => {
-        attrIds.push(gauge.attrid);
-      });
-      var attrIds = attrIds.join("\",\"");
-
-      //Make one history query for all attributes
-      var theQuery = smip.queries.getHistoricalData(attrIds, starttime.toISOString(), endtime.toISOString(), datatype);
-      this.queryHelper(theQuery, this.processGaugeSamples.bind(this));
-    },
-    processGaugeSamples: function(payload, query) {
-      // Get gauge id from attribute
-      if (payload && payload.data && 
-          payload.data.getRawHistoryDataWithSampling && 
-          payload.data.getRawHistoryDataWithSampling.length > 0)
-      {  
-        //TODO: Sometimes we get double samples for each gauge -- this is an API bug, not a UI bug
-        //  However, it introduces inefficiency and we might add logic to throw away extra data
-        payload.data.getRawHistoryDataWithSampling.forEach((element) => {
-          this.gauges.forEach((gauge, idx) => {
-            if (element.id == gauge.attrid) {
-              logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
-              this.gauges[idx].gauge.set(element.floatvalue);
-              document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
+    processUpdateData: function(payload, query) {
+      logger.info("processing data!");
+      this.ready = false;
+      logger.info("gauge payload now: " + JSON.stringify(payload));
+      this.gauges.forEach((gauge, idx) => {
+        logger.info("Updating gauge data " + gauge.attrid);
+        if (payload.SpindleList[0].Motor[gauge.attrid]) {
+          logger.info("gauge value should be: " + payload.SpindleList[0].Motor[gauge.attrid]);
+          this.gauges[idx].gauge.set(payload.SpindleList[0].Motor[gauge.attrid]);
+          document.getElementById(`gauge${idx}Value`).innerText = payload.SpindleList[0].Motor[gauge.attrid];
+        }
+      })
+      logger.info("chart payload now: " + JSON.stringify(payload));
+      logger.info("this axes are: " + JSON.stringify(this.axes));
+      if (payload && payload.AxisList && Array.isArray(payload.AxisList))
+      { 
+        for (var i=0, j=payload.AxisList.length; i<j; i++) {
+          var element = payload.AxisList[i];
+          element.ts = new Date().getTime()
+          element.floatvalue = element.Offset;
+          logger.info("examing axis: " + JSON.stringify(element));
+          var useAxis = this.findAxisForId(element.Id, this.axes);
+          logger.info("this axis is: " + JSON.stringify(useAxis));
+          if (useAxis != -1) {
+            this.shiftAxisSampleWindow(element.ts, element.floatvalue, useAxis, this.axes, this.chartSampleCount);
+            //find axis dataset in chart
+            var found = false;
+            for (var c=0;c<this.chartData.datasets.length;c++) {
+              var dataSet=this.chartData.datasets[c];
+              if (dataSet.label == this.axes[useAxis].displayName) {
+                //update dataset.data
+                dataSet.data = this.axes[useAxis].samples;
+                logger.info("Updating chart data " + dataSet.label, JSON.stringify(dataSet.data));
+                found = true;
+              }
             }
-          })
-        });
-      } else {
-        logger.warn("The SMIP returned no parseable gauge data for the queried time window.");
+            if (!found)
+              logger.warn("Could not find chart axis data to update " + this.axes[useAxis].displayName);
+            //update chart!
+            this.cncAxisChart.update();
+          } else {
+            logger.warn("Could not find axis for sample data!");
+          }
+        }
+      }
+      else {
+        logger.warn("The SMIP returned no parseable axis data for the queried time window.");
         if (payload["errors"] != undefined) {
           logger.warn("Errors from SMIP query: " + JSON.stringify(payload["errors"]));
         }  
       }
-    },
-    findChildEquipmentByDisplayName: function(childEquipName, parentEquipment) {
-      if (childEquipName == null || parentEquipment == null)
-        return null;
-      var children = parentEquipment.childEquipment;
-      for (var c=0;c<children.length;c++) {
-        if (children[c].displayName.toLowerCase() == childEquipName.toLowerCase()) {
-          return children[c];
-        }
-      }
-      return null;
+      this.ready = true;
+      return;
     },
     renderGauges: function() {
       var gaugesRoot = document.getElementById("gaugesDiv");
@@ -401,14 +295,5 @@ typeSupportHelpers.push(cnchighbitetype = {
         this.gauges[idx].gauge.animationSpeed = 32; // set animation speed (32 is default value)
         this.gauges[idx].gauge.set(0); // set gauge value
       }, this)
-    },
-
-    makeRandomNumbers: function(count, min, max) {
-      randoms = [];
-      for (var r=0;r<count;r++) {
-        var n = Math.random();
-        randoms.push(Math.floor(n * (max - min) + min));
-      }
-      return randoms;
     },
 });
