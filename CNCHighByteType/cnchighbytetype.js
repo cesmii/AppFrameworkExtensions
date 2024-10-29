@@ -198,11 +198,14 @@ typeSupportHelpers.push(cnchighbitetype = {
       if (payload && payload.SpindleList && Array.isArray(payload.SpindleList)) {
         for (var c=0;c<payload.SpindleList.length;c++) {
           spindle = payload.SpindleList[c];
+          toolInfo = payload.ToolInformation;
           logger.info("parsing spindle: " + JSON.stringify(spindle));
           if (spindle.Id && spindle.Motor && spindle.Motor.LoadRate)
             discoveredAttr.push({attrid:"LoadRate", gauge:null, maxValue:100, name: "Load Rate"});
+          if (toolInfo.ToolStatus && toolInfo.ToolStatus && toolInfo.ToolStatus.FeedRate)
+            discoveredAttr.push({attrid:"FeedRate", gauge:null, maxValue:25, name: "Feed Rate"});
           if (spindle.Id && spindle.Motor && spindle.Motor.RPM)
-            discoveredAttr.push({attrid:"RPM", gauge:null, maxValue:100, name: "RPM"});
+            discoveredAttr.push({attrid:"RPM", gauge:null, maxValue:1000, name: "RPM"});  
         }
       }
       return discoveredAttr;
@@ -217,6 +220,11 @@ typeSupportHelpers.push(cnchighbitetype = {
           logger.info("gauge value should be: " + payload.SpindleList[0].Motor[gauge.attrid]);
           this.gauges[idx].gauge.set(payload.SpindleList[0].Motor[gauge.attrid]);
           document.getElementById(`gauge${idx}Value`).innerText = payload.SpindleList[0].Motor[gauge.attrid];
+        }
+        if (gauge.attrid == "FeedRate") {
+          logger.info("gauge value should be: " + payload.ToolInformation.ToolStatus.FeedRate);
+          this.gauges[idx].gauge.set(payload.ToolInformation.ToolStatus.FeedRate);
+          document.getElementById(`gauge${idx}Value`).innerText = payload.ToolInformation.ToolStatus.FeedRate;
         }
       })
       logger.info("chart payload now: " + JSON.stringify(payload));
