@@ -1,6 +1,6 @@
 typeSupportHelpers.push(cncmachinefoundationtype = {
     /* IDetailPane Interface Properties */
-    typeName: "cncmachinefoundationtype",
+    typeName: "cncmachinefoundation",
     rootElement: null,
     instanceId: null,
     queryHelper: null,
@@ -61,10 +61,7 @@ typeSupportHelpers.push(cncmachinefoundationtype = {
       logger.info("Activating cncmachinefoundation detail pane!");
       include("TypeSupport/cncmachinefoundation/gauge.js");
       include({ 
-        src:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js",
-        integrity: "sha512-ElRFoEQdI5Ht6kvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==",
-        crossOrigin: "anonymous",
-        referrerpolicy:"no-referrer"
+        src:"TypeSupport/cncmachinefoundation/chart.min.js",
       }, () => {
         /*add elements to DOM once dependency scripts are loaded*/
         logger.info("Dependencies loaded for cncmachinefoundation, initializing UI.")
@@ -126,31 +123,144 @@ typeSupportHelpers.push(cncmachinefoundationtype = {
       this.ready = true;
       self.update();
     },
-    parseAxis:function(payload) {
-      var discoveredAxis = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var children = payload.data.equipment.childEquipment;
-        if (children.length > 0) {
-          for (var c=0;c<children.length;c++) {
-            if (children[c].displayName.toLowerCase() == "channellist") {
-              for (var d=0;d<children[c].childEquipment[0].childEquipment.length;d++) {
-                var child = children[c].childEquipment[0].childEquipment[d];
-                if (child != undefined && (child.displayName.toLowerCase() == "positionbcs" || child.displayName.toLowerCase() == "positionwcs")) {
-                  var axisList = child.childEquipment;
-                  for (var e=0;e<axisList.length;e++) {
-                    discoveredAxis.push( {"displayName":axisList[e].displayName, "equipmentId": axisList[e].id, "attributes": axisList[e].attributes, "timestamps":[], "samples": []});
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          logger.error("Payload did not include expected childEquipment, Axis cannot be rendered!");
+    parseAxis: function(payload) {
+        logger.info("Starting parseAxis with payload:", payload);
+        var discoveredAxis = [];
+
+        if (!payload) {
+            logger.error("parseAxis: Payload is null or undefined");
+            return discoveredAxis;
         }
-      } else {
-        logger.error("Payload did not conform to Profile and cannot be rendered!");
-      }
-      return discoveredAxis;
+
+        if (!payload.data || !payload.data.equipment || !payload.data.equipment.childEquipment) {
+            logger.error("parseAxis: Invalid payload structure. Expected data.equipment.childEquipment");
+            return discoveredAxis;
+        }
+
+        var children = payload.data.equipment.childEquipment;
+        logger.info("Number of child equipment found:", children.length);
+        
+        // First try the original structure (ChannelList path)
+        for (var c = 0; c < children.length; c++) {
+            if (children[c].displayName.toLowerCase() === "channellist") {
+                logger.info("Found ChannelList:", children[c]);
+                
+                if (!children[c].childEquipment || !children[c].childEquipment[0]) {
+                    logger.warn("ChannelList has no children or first child is missing");
+                    continue;
+                }
+
+                var channelChildren = children[c].childEquipment[0].childEquipment;
+                logger.info("Channel children found:", channelChildren ? channelChildren.length : 0);
+
+                if (!channelChildren) {
+                    logger.warn("No channel children found in ChannelList");
+                    continue;
+                }
+
+                for (var d = 0; d < channelChildren.length; d++) {
+                    var child = channelChildren[d];
+                    if (!child) {
+                        logger.warn("Null child found in channel children at index", d);
+                        continue;
+                    }
+
+                    if (child.displayName.toLowerCase() === "positionbcs" || child.displayName.toLowerCase() === "positionwcs") {
+                        logger.info(`Found ${child.displayName}:`, child);
+                        
+                        if (!child.childEquipment) {
+                            logger.warn(`${child.displayName} has no child equipment`);
+                            continue;
+                        }
+
+                        var axisList = child.childEquipment;
+                        logger.info("Axes found in position data:", axisList.length);
+
+                        for (var e = 0; e < axisList.length; e++) {
+                            if (!axisList[e].attributes) {
+                                logger.warn(`Axis ${axisList[e].displayName} has no attributes`);
+                                continue;
+                            }
+
+                            discoveredAxis.push({
+                                "displayName": axisList[e].displayName,
+                                "equipmentId": axisList[e].id,
+                                "attributes": axisList[e].attributes,
+                                "timestamps": [],
+                                "samples": []
+                            });
+                            logger.info(`Added axis from ChannelList structure: ${axisList[e].displayName}`);
+                        }
+                    }
+                }
+            }
+            
+            // Try the new structure (MachineStatus path)
+            if (children[c].displayName === "MachineStatus") {
+                logger.info("Found MachineStatus:", children[c]);
+                
+                if (!children[c].childEquipment) {
+                    logger.warn("MachineStatus has no child equipment");
+                    continue;
+                }
+
+                var machineStatusChildren = children[c].childEquipment;
+                logger.info("MachineStatus children found:", machineStatusChildren.length);
+
+                for (var m = 0; m < machineStatusChildren.length; m++) {
+                    var axis = machineStatusChildren[m];
+                    if (!axis) {
+                        logger.warn("Null axis found in MachineStatus children at index", m);
+                        continue;
+                    }
+
+                    if (axis.displayName.toLowerCase().includes('axis')) {
+                        logger.info("Found axis in MachineStatus:", axis);
+
+                        if (!axis.attributes) {
+                            logger.warn(`Axis ${axis.displayName} has no attributes`);
+                            continue;
+                        }
+
+                        var positionAttr = axis.attributes.find(attr => attr.displayName === "Position");
+                        if (!positionAttr) {
+                            logger.warn(`No Position attribute found for axis ${axis.displayName}`);
+                            continue;
+                        }
+
+                        // Map the new structure to match the expected format
+                        var mappedAttributes = axis.attributes.map(attr => {
+                            if (attr.displayName === "Position") {
+                                return {
+                                    id: attr.id,
+                                    displayName: "ActualPosition"
+                                };
+                            }
+                            return attr;
+                        });
+                        
+                        var axisName = axis.displayName.replace('axis', '').replace('Axis', '');
+                        discoveredAxis.push({
+                            "displayName": axisName,
+                            "equipmentId": axis.id,
+                            "attributes": mappedAttributes,
+                            "timestamps": [],
+                            "samples": []
+                        });
+                        logger.info(`Added axis from MachineStatus structure: ${axisName}`);
+                    }
+                }
+            }
+        }
+
+        if (discoveredAxis.length === 0) {
+            logger.error("No axes were discovered in either ChannelList or MachineStatus structures");
+        } else {
+            logger.info("Total discovered axes:", discoveredAxis.length);
+            logger.info("Discovered axes:", discoveredAxis);
+        }
+
+        return discoveredAxis;
     },
     getAxesData: function() {
       // Pause updates until this one is processed
@@ -274,44 +384,90 @@ typeSupportHelpers.push(cncmachinefoundationtype = {
       });
     },
     parseGaugeAttr: function(payload) {
-      var discoveredAttr = [];
-      if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
-        var spindleList = this.findChildEquipmentByDisplayName("SpindleList", payload.data.equipment);
-        var q = this.findChildEquipmentByDisplayName("Q", spindleList);
-        var motor = this.findChildEquipmentByDisplayName("Motor", q);
-        if (motor != null) {
-          for (var d=0;d<motor.attributes.length;d++) {
-            if (motor.attributes[d].displayName == "LoadRate")
-              discoveredAttr.push({attrid:motor.attributes[d].id, gauge:null, maxValue:100, name: "Motor"});
-          }
+        logger.info("Starting parseGaugeAttr with payload:", payload);
+        var discoveredAttr = [];
+
+        if (payload && payload.data && payload.data.equipment && payload.data.equipment.childEquipment) {
+            // Find MachineStatus section
+            var machineStatus = payload.data.equipment.childEquipment.find(child => 
+                child.displayName === "MachineStatus"
+            );
+
+            if (machineStatus && machineStatus.childEquipment) {
+                logger.info("Found MachineStatus:", machineStatus);
+
+                // Find Spindle
+                var spindle = machineStatus.childEquipment.find(child => 
+                    child.displayName === "Spindle"
+                );
+
+                if (spindle) {
+                    logger.info("Found Spindle:", spindle);
+
+                    // Get Load attribute for Motor Load Rate
+                    var loadAttr = spindle.attributes.find(attr => 
+                        attr.displayName === "Load"
+                    );
+                    if (loadAttr) {
+                        logger.info("Found Load attribute:", loadAttr);
+                        discoveredAttr.push({
+                            attrid: loadAttr.id,
+                            gauge: null,
+                            maxValue: 100,
+                            name: "Motor"
+                        });
+                    } else {
+                        logger.warn("Could not find Load attribute in Spindle!");
+                    }
+
+                    // Get Speed attribute for RPM
+                    var speedAttr = spindle.attributes.find(attr => 
+                        attr.displayName === "Speed"
+                    );
+                    if (speedAttr) {
+                        logger.info("Found Speed attribute:", speedAttr);
+                        discoveredAttr.push({
+                            attrid: speedAttr.id,
+                            gauge: null,
+                            maxValue: 100,
+                            name: "RPM"
+                        });
+                    } else {
+                        logger.warn("Could not find Speed attribute in Spindle!");
+                    }
+                } else {
+                    logger.warn("Could not find Spindle in MachineStatus!");
+                }
+
+                // Get Feedrate from MachineStatus
+                var feedRateAttr = machineStatus.attributes.find(attr => 
+                    attr.displayName === "Feedrate"
+                );
+                if (feedRateAttr) {
+                    logger.info("Found Feedrate attribute:", feedRateAttr);
+                    discoveredAttr.push({
+                        attrid: feedRateAttr.id,
+                        gauge: null,
+                        maxValue: 100,
+                        name: "Feed Rate"
+                    });
+                } else {
+                    logger.warn("Could not find Feedrate attribute in MachineStatus!");
+                }
+            } else {
+                logger.error("MachineStatus found but has no childEquipment!");
+            }
         } else {
-          logger.warn("CNC motor could not be found!");
+            logger.error("Payload did not include expected childEquipment, Gauges cannot be rendered!");
         }
-        var machineInfo = this.findChildEquipmentByDisplayName("MachineInformation", payload.data.equipment);
-        var toolInfo = this.findChildEquipmentByDisplayName("ToolInformation", machineInfo);
-        var toolStatus = this.findChildEquipmentByDisplayName("ToolStatus", toolInfo);
-        var feedRate = this.findChildEquipmentByDisplayName("Feedrate", toolStatus);
-        if (feedRate != null) {
-          for (var d=0;d<feedRate.attributes.length;d++) {
-            if (feedRate.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:feedRate.attributes[d].id, gauge:null, maxValue:100, name: "Feed Rate"});
-          }    
+        
+        if (discoveredAttr.length === 0) {
+            logger.error("No gauge attributes were discovered in the payload!");
         } else {
-          logger.warn("CNC Feedrate could not be found!");
+            logger.info("Discovered gauge attributes:", discoveredAttr);
         }
-        var rpm = this.findChildEquipmentByDisplayName("RPM", toolStatus);
-        if (rpm != null) {
-          for (var d=0;d<rpm.attributes.length;d++) {
-            if (rpm.attributes[d].displayName == "Actual")
-              discoveredAttr.push({attrid:rpm.attributes[d].id, gauge:null, maxValue:100, name: "RPM"});
-          }    
-        } else {
-          logger.warn("CNC RPM could not be found!");
-        }
-      } else {
-        logger.error("Payload did not include expected childEquipment, Gauges cannot be rendered!");
-      }
-      return discoveredAttr;
+        
+        return discoveredAttr;
     },
     getGaugeData() {
       var endtime = new Date(Date.now());

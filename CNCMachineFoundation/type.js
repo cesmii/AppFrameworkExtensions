@@ -1,4 +1,4 @@
-typeSupport.machineTypes.cncmachinefoundationtype = {
+typeSupport.machineTypes.cncmachinefoundation = {
     "name": "CNC Machine Foundation Type",
     "icon": "cncmachinefoundationtype.png",
     "script": "cncmachinefoundationtype.js",
