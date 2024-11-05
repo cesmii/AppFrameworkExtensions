@@ -495,7 +495,7 @@ typeSupportHelpers.push(cncmachinefoundationtype = {
         //  However, it introduces inefficiency and we might add logic to throw away extra data
         payload.data.getRawHistoryDataWithSampling.forEach((element) => {
           this.gauges.forEach((gauge, idx) => {
-            if (element.id == gauge.attrid) {
+            if (element.id == gauge.attrid && element.floatvalue) {
               logger.info("Updating gauge data " + gauge.name + ": " + element.floatvalue);
               this.gauges[idx].gauge.set(element.floatvalue);
               document.getElementById(`gauge${idx}Value`).innerText = element.floatvalue;
